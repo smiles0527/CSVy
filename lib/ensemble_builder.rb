@@ -1,11 +1,18 @@
 require 'csv'
 require 'logger'
+require_relative 'neural_network_wrapper'
 
 class EnsembleOptimizer
-  attr_reader :logger
+  attr_reader :logger, :nn_wrapper
 
   def initialize(logger = Logger.new(STDOUT))
     @logger = logger
+    @nn_wrapper = nil  # Lazy initialization
+  end
+  
+  # Get or create neural network wrapper
+  def neural_network
+    @nn_wrapper ||= NeuralNetworkWrapper.new(logger: logger)
   end
 
   # Stacked generalization (train meta-model on base model predictions)
@@ -123,8 +130,16 @@ class EnsembleOptimizer
       best_rmse = Float::INFINITY
       
       # Generate weight combinations (normalized to sum to 1)
+      # Note: For n_models > 4, this can be very slow (11^n combinations)
+      # Use random_search or inverse_rmse for large ensembles
       step = 0.1
-      (0..10).to_a.repeated_permutation(n_models).each do |weights|
+      grid_values = (0..10).to_a
+      
+      if n_models > 4
+        logger.warn "Grid search with #{n_models} models = #{11**n_models} combinations. Consider :inverse_rmse or :softmax instead."
+      end
+      
+      grid_values.repeated_permutation(n_models).each do |weights|
         next if weights.sum == 0
         normalized = weights.map { |w| w / weights.sum.to_f }
         
@@ -424,6 +439,163 @@ class EnsembleOptimizer
       end
     end
     
-    logger.info "Exported #{models.size} model configurations"
+    logger.info "✓ Ensemble config saved"
+  end
+  
+  # Train neural network and add to ensemble
+  def train_neural_network(data_file, config_file: nil, iterations: 50, target: 'goals')
+    logger.info "Training neural network model for ensemble"
+    
+    # Check dependencies first
+    unless neural_network.check_dependencies
+      logger.error "Cannot train neural network - missing Python dependencies"
+      return nil
+    end
+    
+    # Train model
+    results = neural_network.train(
+      data_file,
+      config_file: config_file,
+      iterations: iterations,
+      target: target
+    )
+    
+    logger.info "Neural network training complete"
+    logger.info "  Best RMSE: #{results[:best_rmse].round(4)}"
+    logger.info "  Best R²: #{results[:best_r2].round(4)}"
+    
+    results
+  end
+  
+  # Get predictions from all models including neural network
+  def get_all_predictions(data_file, models: [:rf, :xgb, :elo, :linear, :nn], target: 'goals')
+    logger.info "Gathering predictions from #{models.size} models"
+    
+    predictions_hash = {}
+    
+    models.each do |model_type|
+      case model_type.to_sym
+      when :nn, :neural_network
+        # Get neural network predictions
+        if neural_network.model_info[:trained]
+          logger.info "  Loading neural network predictions..."
+          nn_preds = neural_network.predict_array(data_file, target: target)
+          predictions_hash[:neural_network] = nn_preds
+        else
+          logger.warn "  Neural network not trained - skipping"
+        end
+        
+      when :rf, :random_forest
+        # Placeholder for random forest predictions
+        # In production, you'd load these from saved models
+        logger.info "  Loading random forest predictions..."
+        # predictions_hash[:random_forest] = load_rf_predictions(data_file)
+        
+      when :xgb, :xgboost
+        logger.info "  Loading XGBoost predictions..."
+        # predictions_hash[:xgboost] = load_xgb_predictions(data_file)
+        
+      when :elo
+        logger.info "  Loading Elo predictions..."
+        # predictions_hash[:elo] = load_elo_predictions(data_file)
+        
+      when :linear
+        logger.info "  Loading linear regression predictions..."
+        # predictions_hash[:linear] = load_linear_predictions(data_file)
+        
+      else
+        logger.warn "  Unknown model type: #{model_type}"
+      end
+    end
+    
+    predictions_hash
+  end
+  
+  # Create full 6-model ensemble including neural network
+  def build_full_ensemble(data_file, actuals, models: [:rf, :xgb, :elo, :linear, :nn])
+    logger.info "Building full ensemble with #{models.size} models"
+    
+    # Get all predictions
+    predictions_hash = get_all_predictions(data_file, models: models)
+    
+    if predictions_hash.empty?
+      logger.error "No predictions available - cannot build ensemble"
+      return nil
+    end
+    
+    # Convert to arrays for optimization
+    model_names = predictions_hash.keys
+    predictions_arrays = predictions_hash.values
+    
+    # Optimize weights
+    optimization_result = optimize_ensemble_weights(
+      predictions_arrays,
+      actuals,
+      method: :inverse_rmse
+    )
+    
+    # Create weighted ensemble
+    ensemble_predictions = weighted_ensemble(
+      predictions_arrays,
+      optimization_result[:optimal_weights]
+    )
+    
+    # Calculate ensemble metrics
+    ensemble_rmse = Math.sqrt(
+      ensemble_predictions.zip(actuals).map { |p, a| (p - a) ** 2 }.sum / actuals.size.to_f
+    )
+    
+    logger.info "✓ Full ensemble complete"
+    logger.info "  Ensemble RMSE: #{ensemble_rmse.round(4)}"
+    logger.info "  Models: #{model_names.join(', ')}"
+    
+    {
+      predictions: ensemble_predictions,
+      weights: Hash[model_names.zip(optimization_result[:optimal_weights])],
+      rmse: ensemble_rmse,
+      models: model_names,
+      optimization: optimization_result
+    }
+  end
+  
+  # Ensemble with neural network diversity analysis
+  def analyze_nn_contribution(data_file, actuals, base_models: [:rf, :xgb, :elo, :linear])
+    logger.info "Analyzing neural network contribution to ensemble"
+    
+    # Ensemble without NN
+    without_nn = get_all_predictions(data_file, models: base_models)
+    preds_without = without_nn.values
+    
+    opt_without = optimize_ensemble_weights(preds_without, actuals)
+    ensemble_without = weighted_ensemble(preds_without, opt_without[:optimal_weights])
+    rmse_without = Math.sqrt(
+      ensemble_without.zip(actuals).map { |p, a| (p - a) ** 2 }.sum / actuals.size.to_f
+    )
+    
+    # Ensemble with NN
+    with_nn = get_all_predictions(data_file, models: base_models + [:nn])
+    preds_with = with_nn.values
+    
+    opt_with = optimize_ensemble_weights(preds_with, actuals)
+    ensemble_with = weighted_ensemble(preds_with, opt_with[:optimal_weights])
+    rmse_with = Math.sqrt(
+      ensemble_with.zip(actuals).map { |p, a| (p - a) ** 2 }.sum / actuals.size.to_f
+    )
+    
+    improvement = rmse_without - rmse_with
+    improvement_pct = (improvement / rmse_without) * 100
+    
+    logger.info "Neural network contribution analysis:"
+    logger.info "  Ensemble without NN: RMSE = #{rmse_without.round(4)}"
+    logger.info "  Ensemble with NN: RMSE = #{rmse_with.round(4)}"
+    logger.info "  Improvement: #{improvement.round(4)} (#{improvement_pct.round(2)}%)"
+    
+    {
+      rmse_without_nn: rmse_without,
+      rmse_with_nn: rmse_with,
+      improvement: improvement,
+      improvement_pct: improvement_pct,
+      nn_weight: opt_with[:optimal_weights].last
+    }
   end
 end

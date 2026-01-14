@@ -1,0 +1,28 @@
+# Model 6: Neural Network (Dense Feed-Forward)
+# Hybrid: Ruby preprocessing → Python NN → Ruby ensemble
+
+architecture:
+  layer1_units: [16, 32, 64, 128]          # First hidden layer size
+  layer2_units: [8, 16, 32, 64]            # Second hidden layer size
+  layer3_units: [0, 8, 16]                 # Third layer (0 = skip)
+  dropout_rate: [0.2, 0.3, 0.4, 0.5]       # Dropout for regularization
+  activation: ['relu', 'tanh', 'elu']      # Activation function
+
+training:
+  learning_rate: [0.001, 0.003, 0.01]      # Adam optimizer LR
+  batch_size: [16, 32, 64]                 # Mini-batch size
+  epochs: [100, 200, 300]                  # Max epochs (early stopping used)
+  patience: [15, 20, 25]                   # Early stopping patience
+  
+regularization:
+  l1_penalty: [0.0, 0.0001, 0.001]        # L1 regularization
+  l2_penalty: [0.0, 0.001, 0.01]          # L2 regularization
+
+# Optimization notes:
+# - Start with 2-layer network (layer3_units=0) due to dataset size
+# - Higher dropout (0.4-0.5) prevents overfitting on ~2600 samples
+# - Early stopping essential (patience=20 recommended)
+# - Batch size 32 balances speed vs gradient noise
+# 
+# Expected search space: 4×4×3×4×3×3×3×3 = 15,552 combinations
+# Recommended: random_search(100) or bayesian_optimize(50)

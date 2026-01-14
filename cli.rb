@@ -16,6 +16,7 @@ require_relative 'lib/advanced_features'
 require_relative 'lib/model_validator'
 require_relative 'lib/ensemble_builder'
 require_relative 'lib/model_tracker'
+require_relative 'lib/neural_network_wrapper'
 
 class CSVOrganizer < Thor
   desc "report FILE", "Generate HTML report with tables (no fancy charts)"
@@ -1092,6 +1093,229 @@ class CSVOrganizer < Thor
     else
       puts "\n⚠ Low diversity. Models may be too similar (consider different algorithms)"
     end
+  end
+  
+  desc "train-neural-network DATA_FILE", "Train neural network model with hyperparameter search"
+  option :config, aliases: :c, type: :string, desc: 'Hyperparameter config YAML (default: model6_neural_network.yaml)'
+  option :iterations, aliases: :i, type: :numeric, default: 50, desc: 'Number of random search iterations'
+  option :target, aliases: :t, type: :string, default: 'goals', desc: 'Target column name'
+  option :output, aliases: :o, type: :string, default: 'model6_neural_network_results.csv', desc: 'Output CSV'
+  def train_neural_network(data_file)
+    unless File.exist?(data_file)
+      puts "✗ Data file not found: #{data_file}"
+      exit 1
+    end
+    
+    puts "🧠 Training neural network model..."
+    puts "  Data: #{data_file}"
+    puts "  Iterations: #{options[:iterations]}"
+    puts "  Target: #{options[:target]}"
+    
+    nn = NeuralNetworkWrapper.new
+    
+    # Check dependencies first
+    unless nn.check_dependencies
+      puts "\n✗ Missing Python dependencies. Install with:"
+      puts "  pip install tensorflow scikit-learn pandas numpy pyyaml"
+      exit 1
+    end
+    
+    # Train model
+    begin
+      results = nn.train(
+        data_file,
+        config_file: options[:config],
+        iterations: options[:iterations].to_i,
+        target: options[:target],
+        output_csv: options[:output]
+      )
+      
+      puts "\n✓ Neural network training complete!"
+      puts "\n=== Best Configuration ==="
+      best = results[:best]
+      puts "  Architecture: #{best['layer1_units']}-#{best['layer2_units']}-#{best['layer3_units']}"
+      puts "  Dropout: #{best['dropout_rate']}"
+      puts "  Learning rate: #{best['learning_rate']}"
+      puts "  Batch size: #{best['batch_size']}"
+      
+      puts "\n=== Performance ==="
+      puts "  RMSE: #{results[:best_rmse].round(4)}"
+      puts "  R²: #{results[:best_r2].round(4)}"
+      puts "  MAE: #{best['mae']}"
+      
+      puts "\n=== Output Files ==="
+      puts "  Results: #{options[:output]}"
+      puts "  Model: models/best_nn_model.keras"
+      puts "  Scaler: models/scaler.pkl"
+      
+      puts "\n💡 Use this model in ensemble with:"
+      puts "  ruby cli.rb ensemble-with-nn #{data_file} --actuals your_actuals.csv"
+      
+    rescue => e
+      puts "\n✗ Training failed: #{e.message}"
+      puts e.backtrace.first(5).join("\n")
+      exit 1
+    end
+  end
+  
+  desc "predict-neural-network DATA_FILE", "Make predictions with trained neural network"
+  option :target, aliases: :t, type: :string, default: 'goals', desc: 'Target column name'
+  option :output, aliases: :o, type: :string, desc: 'Output CSV for predictions'
+  def predict_neural_network(data_file)
+    unless File.exist?(data_file)
+      puts "✗ Data file not found: #{data_file}"
+      exit 1
+    end
+    
+    puts "🔮 Making predictions with neural network..."
+    
+    nn = NeuralNetworkWrapper.new
+    model_info = nn.model_info
+    
+    unless model_info[:trained]
+      puts "✗ No trained model found. Train first with:"
+      puts "  ruby cli.rb train-neural-network #{data_file}"
+      exit 1
+    end
+    
+    begin
+      result = nn.predict(data_file, target: options[:target])
+      predictions = result['predictions']
+      
+      puts "✓ Generated #{predictions.size} predictions"
+      
+      if result['metrics']
+        puts "\n=== Test Metrics ==="
+        puts "  RMSE: #{result['metrics']['rmse'].round(4)}"
+        puts "  R²: #{result['metrics']['r2'].round(4)}"
+        puts "  MAE: #{result['metrics']['mae'].round(4)}"
+      end
+      
+      # Save predictions if output specified
+      if options[:output]
+        CSV.open(options[:output], 'w') do |csv|
+          csv << ['prediction']
+          predictions.each { |p| csv << [p] }
+        end
+        puts "\n✓ Predictions saved to: #{options[:output]}"
+      else
+        puts "\nFirst 5 predictions:"
+        predictions.first(5).each_with_index { |p, i| puts "  [#{i}] #{p.round(4)}" }
+      end
+      
+    rescue => e
+      puts "\n✗ Prediction failed: #{e.message}"
+      exit 1
+    end
+  end
+  
+  desc "ensemble-with-nn DATA_FILE", "Build full 6-model ensemble including neural network"
+  option :actuals, type: :string, required: true, desc: 'CSV file with actual values'
+  option :actual_col, type: :string, default: 'goals', desc: 'Actual values column'
+  option :models, type: :array, default: ['rf', 'xgb', 'elo', 'linear', 'nn'], desc: 'Models to include'
+  option :analyze, type: :boolean, default: false, desc: 'Analyze NN contribution separately'
+  option :output, aliases: :o, type: :string, desc: 'Output file for ensemble predictions'
+  def ensemble_with_nn(data_file)
+    unless File.exist?(data_file)
+      puts "✗ Data file not found: #{data_file}"
+      exit 1
+    end
+    
+    unless File.exist?(options[:actuals])
+      puts "✗ Actuals file not found: #{options[:actuals]}"
+      exit 1
+    end
+    
+    puts "🎯 Building ensemble with neural network..."
+    puts "  Models: #{options[:models].join(', ')}"
+    
+    # Load actuals
+    actuals_data = CSV.read(options[:actuals], headers: true)
+    actuals = actuals_data[options[:actual_col]].map(&:to_f)
+    
+    ensemble = EnsembleOptimizer.new
+    
+    # Analyze NN contribution if requested
+    if options[:analyze]
+      puts "\n=== Neural Network Contribution Analysis ==="
+      base_models = options[:models].reject { |m| m =~ /nn|neural/i }.map(&:to_sym)
+      
+      analysis = ensemble.analyze_nn_contribution(
+        data_file,
+        actuals,
+        base_models: base_models
+      )
+      
+      puts "Without NN: RMSE = #{analysis[:rmse_without_nn].round(4)}"
+      puts "With NN:    RMSE = #{analysis[:rmse_with_nn].round(4)}"
+      puts "Improvement: #{analysis[:improvement].round(4)} (#{analysis[:improvement_pct].round(2)}%)"
+      puts "NN Weight: #{analysis[:nn_weight].round(4)}"
+    end
+    
+    # Build full ensemble
+    puts "\n=== Building Full Ensemble ==="
+    result = ensemble.build_full_ensemble(
+      data_file,
+      actuals,
+      models: options[:models].map(&:to_sym)
+    )
+    
+    if result
+      puts "\n✓ Ensemble complete!"
+      puts "\n=== Model Weights ==="
+      result[:weights].each do |model, weight|
+        puts "  #{model}: #{weight.round(4)}"
+      end
+      
+      puts "\n=== Performance ==="
+      puts "  Ensemble RMSE: #{result[:rmse].round(4)}"
+      puts "  Improvement: #{result[:optimization][:improvement].round(4)} (#{result[:optimization][:improvement_pct].round(2)}%)"
+      
+      # Save predictions if output specified
+      if options[:output]
+        CSV.open(options[:output], 'w') do |csv|
+          csv << ['ensemble_prediction']
+          result[:predictions].each { |p| csv << [p] }
+        end
+        puts "\n✓ Predictions saved to: #{options[:output]}"
+      end
+    else
+      puts "\n✗ Failed to build ensemble"
+      exit 1
+    end
+  end
+  
+  desc "nn-status", "Check neural network model status and dependencies"
+  def nn_status
+    puts "🧠 Neural Network Status\n\n"
+    
+    nn = NeuralNetworkWrapper.new
+    
+    puts "=== Python Dependencies ==="
+    if nn.check_dependencies
+      puts "✓ All dependencies installed"
+    else
+      puts "✗ Missing dependencies - see errors above"
+    end
+    
+    puts "\n=== Trained Model ==="
+    info = nn.model_info
+    
+    if info[:trained]
+      puts "✓ Model trained and ready"
+      puts "  Path: #{info[:model_path]}"
+      puts "  Size: #{(info[:model_size] / 1024.0).round(2)} KB"
+      puts "  Modified: #{info[:modified]}"
+    else
+      puts "✗ No trained model found"
+      puts "  Train with: ruby cli.rb train-neural-network DATA_FILE"
+    end
+    
+    puts "\n=== Integration ==="
+    puts "Available commands:"
+    puts "  ruby cli.rb train-neural-network DATA_FILE --iterations 100"
+    puts "  ruby cli.rb predict-neural-network DATA_FILE"
+    puts "  ruby cli.rb ensemble-with-nn DATA_FILE --actuals ACTUALS_FILE"
   end
 end
 
