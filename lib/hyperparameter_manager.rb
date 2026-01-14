@@ -145,8 +145,13 @@ class HyperparameterManager
       
       return true
     end
-  rescue => e
-    puts "Error adding result: #{e.message}"
+  rescue Errno::ENOENT, Errno::EACCES, IOError => e
+    # File system errors (permission denied, file not found after check, etc.)
+    puts "File error adding result: #{e.message}"
+    return false
+  rescue Psych::SyntaxError, Psych::BadAlias => e
+    # YAML parsing/writing errors
+    puts "YAML error adding result: #{e.message}"
     return false
   end
 
