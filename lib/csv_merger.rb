@@ -32,11 +32,10 @@ class CSVMerger
     end
     
     # Combine the data
-    merged = CSV::Table.new([])
-    merged.headers = data1.headers
-    
-    data1.each { |row| merged << row }
-    data2.each { |row| merged << row }
+    merged_rows = []
+    data1.each { |row| merged_rows << row }
+    data2.each { |row| merged_rows << row }
+    merged = CSV::Table.new(merged_rows)
     
     logger.info "Merged #{data1.length} and #{data2.length} rows = #{merged.length} total rows"
     merged
@@ -61,9 +60,8 @@ class CSVMerger
     end
     
     # Join the data
-    merged = CSV::Table.new([])
     all_headers = (data1.headers + data2.headers).uniq
-    merged.headers = all_headers
+    merged_rows = []
     
     data1.each do |row1|
       key = row1[key_column]
@@ -75,17 +73,18 @@ class CSVMerger
         all_headers.each do |header|
           merged_row[header] = row1[header] || row2[header]
         end
-        merged << merged_row
+        merged_rows << merged_row
       else
         # Add row1 with nil values for file2 columns
         merged_row = CSV::Row.new(all_headers, [])
         all_headers.each do |header|
           merged_row[header] = row1[header]
         end
-        merged << merged_row
+        merged_rows << merged_row
       end
     end
     
+    merged = CSV::Table.new(merged_rows)
     logger.info "Join complete. #{merged.length} rows in result"
     merged
   end

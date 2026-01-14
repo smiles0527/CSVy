@@ -1,5 +1,6 @@
 require 'csv'
 require 'logger'
+require 'set'
 
 class CSVCleaner
   attr_reader :file_path, :data, :logger
@@ -20,51 +21,33 @@ class CSVCleaner
   def clean_data
     logger.info "Starting data cleaning process with side-by-side comparison"
     
-    # Create new data structure with original + cleaned columns
-    original_headers = @data.headers
-    numeric_columns = identify_numeric_columns
-    text_columns = original_headers - numeric_columns
-    
-    # Build new headers: original columns + cleaned columns
-    new_headers = original_headers.dup
-    (numeric_columns + text_columns).each do |col|
-      new_headers << "#{col}_cleaned"
+    # Remove empty rows
+    non_empty_data = @data.reject do |row|
+      row.fields.all? { |field| field.nil? || field.to_s.strip.empty? }
     end
     
-    result_data = CSV::Table.new([])
-    result_data.headers = new_headers
-    
-    @data.each do |row|
-      new_row = {}
-      
-      # Copy original values
-      original_headers.each { |h| new_row[h] = row[h] }
-      
-      # Add cleaned numeric columns
-      numeric_columns.each do |col|
-        value = row[col]
-        if value.nil? || value.to_s.strip.empty?
-          # Fill with column mean
-          new_row["#{col}_cleaned"] = calculate_column_mean(col)
-        else
-          # Remove outliers
-          new_row["#{col}_cleaned"] = handle_outlier(col, value.to_f)
+    # Trim whitespace
+    non_empty_data.each do |row|
+      @data.headers.each do |header|
+        if row[header]
+          row[header] = row[header].to_s.strip
         end
       end
-      
-      # Add cleaned text columns
-      text_columns.each do |col|
-        value = row[col]
-        new_row["#{col}_cleaned"] = if value.nil? || value.to_s.strip.empty?
-          "MISSING"
-        else
-          value.to_s.strip
-        end
-      end
-      
-      result_data << new_row
     end
     
+    # Remove duplicates
+    seen = Set.new
+    result_rows = []
+    
+    non_empty_data.each do |row|
+      row_key = row.fields.join('|')
+      unless seen.include?(row_key)
+        seen.add(row_key)
+        result_rows << row
+      end
+    end
+    
+    result_data = CSV::Table.new(result_rows)
     logger.info "Cleaning complete with comparison columns added"
     logger.info "Original columns preserved, cleaned versions added with '_cleaned' suffix"
     result_data

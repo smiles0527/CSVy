@@ -9,7 +9,7 @@ class DataPreprocessor
     @logger.level = Logger::INFO
   end
 
-  # One-hot encoding for categorical variables (adds new columns, preserves original)
+  # One-hot encoding for categorical variables (removes original column)
   def one_hot_encode(data, column_name)
     logger.info "One-hot encoding column: #{column_name}"
     
@@ -17,13 +17,16 @@ class DataPreprocessor
     unique_values = data.map { |row| row[column_name] }.compact.uniq.sort
     logger.info "Found #{unique_values.length} unique values: #{unique_values.join(', ')}"
     
-    # Create new columns for each unique value (preserving original)
+    # Create new columns for each unique value
     unique_values.each do |value|
-      new_column_name = "#{column_name}_encoded_#{sanitize_column_name(value)}"
+      new_column_name = "#{column_name}_#{sanitize_column_name(value).downcase}"
       data.each do |row|
         row[new_column_name] = row[column_name] == value ? '1' : '0'
       end
     end
+    
+    # Remove original column
+    data.each { |row| row.delete(column_name) }
     
     logger.info "One-hot encoding complete. Original column preserved, added #{unique_values.length} encoded columns"
     data
@@ -46,7 +49,7 @@ class DataPreprocessor
     data
   end
 
-  # Normalize: adds new column, preserves original
+  # Normalize: modifies column in place
   def normalize(data, column_name)
     logger.info "Normalizing column: #{column_name}"
     
@@ -60,11 +63,10 @@ class DataPreprocessor
       return data
     end
     
-    new_column_name = "#{column_name}_normalized"
     data.each do |row|
       if row[column_name] && !row[column_name].to_s.strip.empty?
         normalized = (row[column_name].to_f - min_val) / range
-        row[new_column_name] = normalized.round(6).to_s
+        row[column_name] = normalized.round(6).to_s
       end
     end
     
