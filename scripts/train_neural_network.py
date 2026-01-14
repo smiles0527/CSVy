@@ -140,15 +140,22 @@ def load_data(csv_path, target_col='goals'):
     X = df.drop(columns=[target_col])
     y = df[target_col]
     
+    # Filter out non-numeric columns (e.g., team names, IDs)
+    numeric_cols = X.select_dtypes(include=[np.number]).columns
+    if len(numeric_cols) < len(X.columns):
+        dropped = set(X.columns) - set(numeric_cols)
+        print(f"Dropping non-numeric columns: {dropped}")
+        X = X[numeric_cols]
+    
+    if len(X.columns) == 0:
+        raise ValueError("No numeric features found in dataset")
+    
     return X, y
 
 
 def hyperparameter_search(X, y, config_path, n_samples=50, output_csv='nn_results.csv'):
     """Random search over hyperparameter space"""
-    from lib.hyperparameter_manager import HyperparameterManager
-    
-    # This would integrate with Ruby's HyperparameterManager
-    # For now, simple random search in Python
+    # Pure Python implementation - independent of Ruby
     
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -220,7 +227,6 @@ def main():
                        help='Run random search with N samples')
     parser.add_argument('--output', default='model6_neural_network_results.csv',
                        help='Output CSV for search results')
-    parser.add_argument('--predict', help='Make predictions on new data')
     
     args = parser.parse_args()
     
@@ -244,12 +250,6 @@ def main():
         print(f"  Architecture: {int(best['layer1_units'])}-{int(best['layer2_units'])}-{int(best['layer3_units'])}")
         print(f"  Dropout: {best['dropout_rate']:.2f}, LR: {best['learning_rate']:.4f}")
         
-    elif args.predict:
-        # Load best model and make predictions
-        print(f"\nLoading best model for prediction...")
-        # Implementation for loading and predicting
-        pass
-    
     else:
         # Single training run with default params
         print("\nTraining single model with default hyperparameters...")

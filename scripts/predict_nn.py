@@ -47,6 +47,13 @@ def predict(data_file, target_col='goals', model_dir='models'):
         y = None
         has_target = False
     
+    # Filter out non-numeric columns (e.g., team names)
+    numeric_cols = X.select_dtypes(include=[np.number]).columns
+    if len(numeric_cols) < len(X.columns):
+        dropped = set(X.columns) - set(numeric_cols)
+        print(f"Warning: Dropping non-numeric columns: {dropped}", file=sys.stderr)
+        X = X[numeric_cols]
+    
     # Scale features
     X_scaled = scaler.transform(X)
     

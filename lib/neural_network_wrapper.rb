@@ -1,6 +1,7 @@
 require 'json'
 require 'logger'
 require 'tempfile'
+require 'csv'
 
 class NeuralNetworkWrapper
   attr_reader :logger, :python_script, :model_path, :scaler_path
@@ -77,10 +78,10 @@ class NeuralNetworkWrapper
     predict_script = create_prediction_script
     
     begin
-      cmd = "#{@python_exe} #{predict_script} #{data_file} #{target}"
-      logger.info "Executing prediction: #{cmd}"
+      logger.info "Executing prediction: #{@python_exe} #{predict_script} #{data_file} #{target}"
       
-      output = `#{cmd}`
+      # Use IO.popen to avoid shell injection
+      output = IO.popen([@python_exe, predict_script, data_file, target], err: [:child, :out], &:read)
       
       if $?.success?
         predictions = JSON.parse(output)

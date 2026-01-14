@@ -486,25 +486,25 @@ class EnsembleOptimizer
         end
         
       when :rf, :random_forest
-        # Placeholder for random forest predictions
-        # In production, you'd load these from saved models
-        logger.info "  Loading random forest predictions..."
-        # predictions_hash[:random_forest] = load_rf_predictions(data_file)
+        logger.error "  Random Forest model loading not yet implemented"
+        logger.error "  Use predict_array parameter or implement load_rf_predictions method"
+        raise NotImplementedError, "Random Forest prediction loading not implemented. Pass predictions directly or implement loader."
         
       when :xgb, :xgboost
-        logger.info "  Loading XGBoost predictions..."
-        # predictions_hash[:xgboost] = load_xgb_predictions(data_file)
+        logger.error "  XGBoost model loading not yet implemented"
+        raise NotImplementedError, "XGBoost prediction loading not implemented. Pass predictions directly or implement loader."
         
       when :elo
-        logger.info "  Loading Elo predictions..."
-        # predictions_hash[:elo] = load_elo_predictions(data_file)
+        logger.error "  Elo model loading not yet implemented"
+        raise NotImplementedError, "Elo prediction loading not implemented. Pass predictions directly or implement loader."
         
       when :linear
-        logger.info "  Loading linear regression predictions..."
-        # predictions_hash[:linear] = load_linear_predictions(data_file)
+        logger.error "  Linear regression model loading not yet implemented"
+        raise NotImplementedError, "Linear regression prediction loading not implemented. Pass predictions directly or implement loader."
         
       else
-        logger.warn "  Unknown model type: #{model_type}"
+        logger.error "  Unknown model type: #{model_type}"
+        raise ArgumentError, "Unknown model type: #{model_type}. Supported: :nn (neural_network)"
       end
     end
     

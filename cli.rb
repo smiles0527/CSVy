@@ -1141,7 +1141,7 @@ class CSVOrganizer < Thor
       puts "\n=== Performance ==="
       puts "  RMSE: #{results[:best_rmse].round(4)}"
       puts "  R²: #{results[:best_r2].round(4)}"
-      puts "  MAE: #{best['mae']}"
+      puts "  MAE: #{best['mae'].to_f.round(4)}"
       
       puts "\n=== Output Files ==="
       puts "  Results: #{options[:output]}"
@@ -1231,6 +1231,13 @@ class CSVOrganizer < Thor
     
     # Load actuals
     actuals_data = CSV.read(options[:actuals], headers: true)
+    
+    unless actuals_data.headers.include?(options[:actual_col])
+      puts "✗ Column '#{options[:actual_col]}' not found in #{options[:actuals]}"
+      puts "  Available columns: #{actuals_data.headers.join(', ')}"
+      exit 1
+    end
+    
     actuals = actuals_data[options[:actual_col]].map(&:to_f)
     
     ensemble = EnsembleOptimizer.new
