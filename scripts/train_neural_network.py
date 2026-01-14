@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler, PolynomialFeatures
 from sklearn.metrics import mean_squared_error, r2_score
 import tensorflow as tf
 from tensorflow import keras
@@ -23,7 +23,17 @@ class HockeyNN:
     def __init__(self, params):
         self.params = params
         self.model = None
-        self.scaler = StandardScaler()
+        # Select scaler based on params
+        scaler_type = params.get('scaler', 'standard')
+        if scaler_type == 'minmax':
+            self.scaler = MinMaxScaler()
+        elif scaler_type == 'robust':
+            self.scaler = RobustScaler()
+        else:
+            self.scaler = StandardScaler()
+        self.poly = None
+        if params.get('polynomial_degree', 1) > 1:
+            self.poly = PolynomialFeatures(degree=params['polynomial_degree'], include_bias=False)
         self.history = None
         
     def build_model(self, input_dim):
@@ -74,6 +84,11 @@ class HockeyNN:
     def train(self, X_train, y_train, X_val, y_val):
         """Train the neural network with early stopping"""
         
+        # Apply polynomial features if configured
+        if self.poly:
+            X_train = self.poly.fit_transform(X_train)
+            X_val = self.poly.transform(X_val)
+        
         # Scale features
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_val_scaled = self.scaler.transform(X_val)
@@ -103,6 +118,8 @@ class HockeyNN:
     
     def predict(self, X):
         """Make predictions"""
+        if self.poly:
+            X = self.poly.transform(X)
         X_scaled = self.scaler.transform(X)
         return self.model.predict(X_scaled, verbose=0).flatten()
     
@@ -122,16 +139,67 @@ class HockeyNN:
     def save_model(self, path):
         """Save trained model"""
         self.model.save(path)
-        # Save scaler separately
+        # Save scaler and poly separately
         import pickle
         scaler_path = str(Path(path).parent / 'scaler.pkl')
         with open(scaler_path, 'wb') as f:
             pickle.dump(self.scaler, f)
+        if self.poly:
+            poly_path = str(Path(path).parent / 'poly.pkl')
+            with open(poly_path, 'wb') as f:
+                pickle.dump(self.poly, f)
 
 
-def load_data(csv_path, target_col='goals'):
+def engineer_hockey_features(df):
+    """Add hockey-specific engineered features"""
+    df = df.copy()
+    
+    # Recent form features (if game-by-game data)
+    if 'game_number' in df.columns and 'team_id' in df.columns:
+        df = df.sort_values(['team_id', 'game_number'])
+        # 5-game rolling averages
+        df['goals_last_5'] = df.groupby('team_id')['goals'].transform(lambda x: x.rolling(5, min_periods=1).mean())
+        df['goals_allowed_last_5'] = df.groupby('team_id')['goals_allowed'].transform(lambda x: x.rolling(5, min_periods=1).mean()) if 'goals_allowed' in df.columns else 0
+    
+    # Rest days (if date columns exist)
+    if 'game_date' in df.columns and 'team_id' in df.columns:
+        df['game_date'] = pd.to_datetime(df['game_date'])
+        df = df.sort_values(['team_id', 'game_date'])
+        df['rest_days'] = df.groupby('team_id')['game_date'].diff().dt.days.fillna(3)
+    
+    # Goal differential features
+    if 'goals_for' in df.columns and 'goals_against' in df.columns:
+        df['goal_differential'] = df['goals_for'] - df['goals_against']
+        df['goal_differential_pct'] = df['goals_for'] / (df['goals_for'] + df['goals_against'] + 1e-8)
+    
+    return df
+
+
+def add_interaction_features(X, max_interactions=20):
+    """Add top feature interactions (product of pairs)"""
+    # Select most important feature pairs (simple heuristic: highest variance)
+    feature_vars = X.var().sort_values(ascending=False)
+    top_features = feature_vars.head(min(10, len(feature_vars))).index.tolist()
+    
+    interactions_added = 0
+    for i, feat1 in enumerate(top_features):
+        for feat2 in top_features[i+1:]:
+            if interactions_added >= max_interactions:
+                break
+            X[f'{feat1}_x_{feat2}'] = X[feat1] * X[feat2]
+            interactions_added += 1
+    
+    return X
+
+
+def load_data(csv_path, target_col='goals', add_hockey_features=False, add_interactions=False):
     """Load preprocessed CSV from Ruby pipeline"""
     df = pd.read_csv(csv_path)
+    
+    # Add hockey-specific features
+    if add_hockey_features:
+        print("Adding hockey-specific features...")
+        df = engineer_hockey_features(df)
     
     # Separate features and target
     if target_col not in df.columns:
@@ -150,7 +218,43 @@ def load_data(csv_path, target_col='goals'):
     if len(X.columns) == 0:
         raise ValueError("No numeric features found in dataset")
     
+    # Add interaction features
+    if add_interactions:
+        print("Adding interaction features...")
+        X = add_interaction_features(X)
+    
     return X, y
+
+
+def validate_architecture_for_dataset(n_samples, n_features, params):
+    """Validate NN architecture against dataset size to prevent overfitting"""
+    warnings = []
+    
+    # Calculate total parameters
+    layer1 = params['layer1_units']
+    layer2 = params['layer2_units']
+    layer3 = params.get('layer3_units', 0)
+    
+    total_params = (n_features * layer1) + layer1 + (layer1 * layer2) + layer2
+    if layer3 > 0:
+        total_params += (layer2 * layer3) + layer3 + layer3 + 1
+    else:
+        total_params += layer2 + 1
+    
+    # Rule of thumb: need 10x samples per parameter for good generalization
+    recommended_samples = total_params * 10
+    
+    if n_samples < recommended_samples:
+        ratio = n_samples / recommended_samples
+        warnings.append(f"⚠️  Dataset too small for architecture: {n_samples} samples vs {total_params} params (need ~{recommended_samples})")
+        warnings.append(f"   Risk: {(1-ratio)*100:.0f}% overfitting probability. Consider: reduce layers, add dropout, or get more data")
+    
+    # Recommend max layer sizes
+    max_safe_layer1 = int(np.sqrt(n_samples / 10))
+    if layer1 > max_safe_layer1:
+        warnings.append(f"   Recommendation: layer1_units <= {max_safe_layer1} for dataset size")
+    
+    return warnings
 
 
 def hyperparameter_search(X, y, config_path, n_samples=50, output_csv='nn_results.csv'):
@@ -159,6 +263,15 @@ def hyperparameter_search(X, y, config_path, n_samples=50, output_csv='nn_result
     
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
+    
+    # Warn if dataset is small
+    if len(y) < 500:
+        print(f"\n⚠️  WARNING: Small dataset ({len(y)} samples) - high overfitting risk!")
+        print("   Recommendations:")
+        print("   - Use 2-layer network (layer3_units=0)")
+        print("   - High dropout (0.4-0.5)")
+        print("   - Strong regularization (l2_penalty=0.01)")
+        print("   - Early stopping (patience=15-20)\n")
     
     results = []
     
@@ -175,8 +288,16 @@ def hyperparameter_search(X, y, config_path, n_samples=50, output_csv='nn_result
             'epochs': int(np.random.choice(config['training']['epochs'])),
             'patience': int(np.random.choice(config['training']['patience'])),
             'l1_penalty': np.random.choice(config['regularization']['l1_penalty']),
-            'l2_penalty': np.random.choice(config['regularization']['l2_penalty'])
+            'l2_penalty': np.random.choice(config['regularization']['l2_penalty']),
+            'scaler': np.random.choice(config.get('feature_engineering', {}).get('scaler', ['standard'])),
+            'polynomial_degree': int(np.random.choice(config.get('feature_engineering', {}).get('polynomial_degree', [1])))
         }
+        
+        # Validate architecture for dataset size
+        arch_warnings = validate_architecture_for_dataset(len(y), X.shape[1], params)
+        if arch_warnings and i == 0:  # Show once at start
+            for warning in arch_warnings:
+                print(warning)
         
         # Split data
         X_train, X_test, y_train, y_test = train_test_split(
@@ -235,8 +356,14 @@ def main():
     
     # Load data
     print(f"Loading data from {args.data}...")
-    X, y = load_data(args.data, args.target)
+    X, y = load_data(args.data, args.target, 
+                     add_hockey_features=True,  # Enable hockey-specific features
+                     add_interactions=False)     # Enable if beneficial
     print(f"  Features: {X.shape[1]}, Samples: {len(y)}")
+    
+    # Dataset size warning
+    if len(y) < 500:
+        print(f"  ⚠️  Small dataset! Recommend: simpler architecture, high dropout, strong regularization")
     
     if args.search:
         # Hyperparameter search
