@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hyperparameter Report - model5_ensemble_grid</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Courier New', monospace;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    .header {
+      background: #252526;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-left: 4px solid #007acc;
+    }
+    .header h1 { 
+      font-size: 1.8em; 
+      margin-bottom: 5px;
+      color: #4ec9b0;
+    }
+    .header p { 
+      color: #858585;
+      font-size: 0.9em;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: #252526;
+      padding: 15px;
+      border-left: 3px solid #007acc;
+    }
+    .stat-label {
+      color: #858585;
+      font-size: 0.85em;
+      margin-bottom: 5px;
+    }
+    .stat-value {
+      color: #4ec9b0;
+      font-size: 1.5em;
+      font-weight: bold;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #252526;
+      margin-bottom: 20px;
+      font-size: 0.9em;
+    }
+    th {
+      background: #2d2d30;
+      color: #4ec9b0;
+      padding: 10px 8px;
+      text-align: left;
+      border-bottom: 2px solid #007acc;
+      font-weight: normal;
+      position: sticky;
+      top: 0;
+    }
+    td {
+      padding: 8px;
+      border-bottom: 1px solid #3e3e42;
+    }
+    tr:hover {
+      background: #2a2d2e;
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    .section-title {
+      color: #4ec9b0;
+      font-size: 1.4em;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #3e3e42;
+    }
+    .best-config {
+      background: #1e3a1e !important;
+      border-left: 3px solid #6a9955;
+    }
+    .pending {
+      color: #858585;
+    }
+    .completed {
+      color: #4ec9b0;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.8em;
+    }
+    .badge-best {
+      background: #1e3a1e;
+      color: #6a9955;
+    }
+    .badge-pending {
+      background: #332a1e;
+      color: #d7ba7d;
+    }
+    .badge-completed {
+      background: #1e3a5f;
+      color: #4fc3f7;
+    }
+    .metric-good {
+      color: #6a9955;
+      font-weight: bold;
+    }
+    .metric-bad {
+      color: #f48771;
+    }
+    .scrollable {
+      max-height: 600px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>HYPERPARAMETER TRACKING</h1>
+      <p>Model: model5_ensemble_grid</p>
+      <p>File: model5_ensemble_grid.csv</p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Configs</div>
+        <div class="stat-value">36</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Completed</div>
+        <div class="stat-value completed">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pending</div>
+        <div class="stat-value pending">36</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Progress</div>
+        <div class="stat-value">0.0%</div>
+      </div>
+    </div>
+
+    
+
+    <div class="section">
+      <h2 class="section-title">ALL CONFIGURATIONS (36)</h2>
+      <div class="scrollable">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>weight_method</th><th>meta_learner</th><th>meta_alpha</th><th>use_base_features</th><th>cv_folds</th>
+              <th>RMSE</th>
+              <th>MAE</th>
+              <th>R²</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="">
+  <td>1</td>
+  <td>inverse_rmse</td><td>ridge</td><td>0.01</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>2</td>
+  <td>inverse_rmse</td><td>ridge</td><td>0.01</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>3</td>
+  <td>inverse_rmse</td><td>ridge</td><td>0.1</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>4</td>
+  <td>inverse_rmse</td><td>ridge</td><td>0.1</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>5</td>
+  <td>inverse_rmse</td><td>ridge</td><td>1.0</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>6</td>
+  <td>inverse_rmse</td><td>ridge</td><td>1.0</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>7</td>
+  <td>inverse_rmse</td><td>elastic_net</td><td>0.01</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>8</td>
+  <td>inverse_rmse</td><td>elastic_net</td><td>0.01</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>9</td>
+  <td>inverse_rmse</td><td>elastic_net</td><td>0.1</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>10</td>
+  <td>inverse_rmse</td><td>elastic_net</td><td>0.1</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>11</td>
+  <td>inverse_rmse</td><td>elastic_net</td><td>1.0</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>12</td>
+  <td>inverse_rmse</td><td>elastic_net</td><td>1.0</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>13</td>
+  <td>softmax</td><td>ridge</td><td>0.01</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>14</td>
+  <td>softmax</td><td>ridge</td><td>0.01</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>15</td>
+  <td>softmax</td><td>ridge</td><td>0.1</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>16</td>
+  <td>softmax</td><td>ridge</td><td>0.1</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>17</td>
+  <td>softmax</td><td>ridge</td><td>1.0</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>18</td>
+  <td>softmax</td><td>ridge</td><td>1.0</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>19</td>
+  <td>softmax</td><td>elastic_net</td><td>0.01</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>20</td>
+  <td>softmax</td><td>elastic_net</td><td>0.01</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>21</td>
+  <td>softmax</td><td>elastic_net</td><td>0.1</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>22</td>
+  <td>softmax</td><td>elastic_net</td><td>0.1</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>23</td>
+  <td>softmax</td><td>elastic_net</td><td>1.0</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>24</td>
+  <td>softmax</td><td>elastic_net</td><td>1.0</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>25</td>
+  <td>equal</td><td>ridge</td><td>0.01</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>26</td>
+  <td>equal</td><td>ridge</td><td>0.01</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>27</td>
+  <td>equal</td><td>ridge</td><td>0.1</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>28</td>
+  <td>equal</td><td>ridge</td><td>0.1</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>29</td>
+  <td>equal</td><td>ridge</td><td>1.0</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>30</td>
+  <td>equal</td><td>ridge</td><td>1.0</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>31</td>
+  <td>equal</td><td>elastic_net</td><td>0.01</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>32</td>
+  <td>equal</td><td>elastic_net</td><td>0.01</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>33</td>
+  <td>equal</td><td>elastic_net</td><td>0.1</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>34</td>
+  <td>equal</td><td>elastic_net</td><td>0.1</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>35</td>
+  <td>equal</td><td>elastic_net</td><td>1.0</td><td>true</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+<tr class="">
+  <td>36</td>
+  <td>equal</td><td>elastic_net</td><td>1.0</td><td>false</td><td>5</td>
+  <td class="">-</td>
+  <td>-</td>
+  <td>-</td>
+  <td><span class="badge badge-pending">⏳ Pending</span></td>
+</tr>
+
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

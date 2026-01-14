@@ -34,6 +34,286 @@ class HTMLReporter
     output_file
   end
 
+  # Generate HTML report for hyperparameter tracking/results
+  def generate_hyperparam_report(csv_file, output_file = nil)
+    output_file ||= csv_file.gsub('.csv', '_report.html')
+    
+    logger.info "Generating hyperparameter report for #{csv_file}"
+    
+    # Load data
+    data = CSV.read(csv_file, headers: true)
+    headers = data.headers
+    
+    # Identify columns
+    param_cols = headers.reject { |h| ['experiment_id', 'rmse', 'mae', 'r2', 'notes', 'timestamp'].include?(h) }
+    tracking_cols = headers & ['experiment_id', 'rmse', 'mae', 'r2', 'notes', 'timestamp']
+    
+    # Find best configs (if results exist)
+    completed_rows = data.select { |row| !row['rmse'].nil? && !row['rmse'].to_s.strip.empty? }
+    best_by_rmse = completed_rows.min_by { |row| row['rmse'].to_f } if completed_rows.any?
+    best_by_r2 = completed_rows.max_by { |row| row['r2'].to_f } if completed_rows.any?
+    
+    # Calculate completion stats
+    completed_count = completed_rows.size
+    pending_count = data.size - completed_count
+    
+    # Generate HTML
+    html = build_hyperparam_html(
+      csv_file, 
+      data, 
+      param_cols, 
+      tracking_cols, 
+      best_by_rmse, 
+      best_by_r2,
+      completed_count,
+      pending_count
+    )
+    
+    # Write to file
+    File.write(output_file, html)
+    logger.info "Hyperparameter report saved to #{output_file}"
+    
+    output_file
+  end
+
+  def build_hyperparam_html(csv_file, data, param_cols, tracking_cols, best_rmse, best_r2, completed, pending)
+    model_name = File.basename(csv_file, '.csv')
+    
+    <<~HTML
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Hyperparameter Report - #{model_name}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            line-height: 1.6;
+          }
+          .container { max-width: 1400px; margin: 0 auto; }
+          .header {
+            background: #252526;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007acc;
+          }
+          .header h1 { 
+            font-size: 1.8em; 
+            margin-bottom: 5px;
+            color: #4ec9b0;
+          }
+          .header p { 
+            color: #858585;
+            font-size: 0.9em;
+          }
+          .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+          }
+          .stat-card {
+            background: #252526;
+            padding: 15px;
+            border-left: 3px solid #007acc;
+          }
+          .stat-label {
+            color: #858585;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+          }
+          .stat-value {
+            color: #4ec9b0;
+            font-size: 1.5em;
+            font-weight: bold;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #252526;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+          }
+          th {
+            background: #2d2d30;
+            color: #4ec9b0;
+            padding: 10px 8px;
+            text-align: left;
+            border-bottom: 2px solid #007acc;
+            font-weight: normal;
+            position: sticky;
+            top: 0;
+          }
+          td {
+            padding: 8px;
+            border-bottom: 1px solid #3e3e42;
+          }
+          tr:hover {
+            background: #2a2d2e;
+          }
+          .section {
+            margin-bottom: 30px;
+          }
+          .section-title {
+            color: #4ec9b0;
+            font-size: 1.4em;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #3e3e42;
+          }
+          .best-config {
+            background: #1e3a1e !important;
+            border-left: 3px solid #6a9955;
+          }
+          .pending {
+            color: #858585;
+          }
+          .completed {
+            color: #4ec9b0;
+          }
+          .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+          }
+          .badge-best {
+            background: #1e3a1e;
+            color: #6a9955;
+          }
+          .badge-pending {
+            background: #332a1e;
+            color: #d7ba7d;
+          }
+          .badge-completed {
+            background: #1e3a5f;
+            color: #4fc3f7;
+          }
+          .metric-good {
+            color: #6a9955;
+            font-weight: bold;
+          }
+          .metric-bad {
+            color: #f48771;
+          }
+          .scrollable {
+            max-height: 600px;
+            overflow-y: auto;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>HYPERPARAMETER TRACKING</h1>
+            <p>Model: #{model_name}</p>
+            <p>File: #{File.basename(csv_file)}</p>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Total Configs</div>
+              <div class="stat-value">#{data.size}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Completed</div>
+              <div class="stat-value completed">#{completed}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Pending</div>
+              <div class="stat-value pending">#{pending}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Progress</div>
+              <div class="stat-value">#{((completed.to_f / data.size * 100).round(1))}%</div>
+            </div>
+          </div>
+
+          #{best_rmse ? generate_best_config_section(best_rmse, best_r2, param_cols) : ''}
+
+          <div class="section">
+            <h2 class="section-title">ALL CONFIGURATIONS (#{data.size})</h2>
+            <div class="scrollable">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    #{param_cols.map { |col| "<th>#{col}</th>" }.join}
+                    <th>RMSE</th>
+                    <th>MAE</th>
+                    <th>R²</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  #{data.map { |row| generate_config_row(row, param_cols, best_rmse) }.join}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    HTML
+  end
+
+  def generate_best_config_section(best_rmse, best_r2, param_cols)
+    <<~HTML
+      <div class="section">
+        <h2 class="section-title">🏆 BEST CONFIGURATION (by RMSE)</h2>
+        <table>
+          <tr>
+            <td><strong>Experiment ID</strong></td>
+            <td>#{best_rmse['experiment_id']}</td>
+          </tr>
+          <tr>
+            <td><strong>RMSE</strong></td>
+            <td class="metric-good">#{best_rmse['rmse']}</td>
+          </tr>
+          <tr>
+            <td><strong>MAE</strong></td>
+            <td>#{best_rmse['mae']}</td>
+          </tr>
+          <tr>
+            <td><strong>R²</strong></td>
+            <td>#{best_rmse['r2']}</td>
+          </tr>
+          #{param_cols.map { |col| "<tr><td><strong>#{col}</strong></td><td>#{best_rmse[col]}</td></tr>" }.join("\n")}
+        </table>
+      </div>
+    HTML
+  end
+
+  def generate_config_row(row, param_cols, best_config)
+    is_best = best_config && row['experiment_id'] == best_config['experiment_id']
+    has_results = !row['rmse'].nil? && !row['rmse'].to_s.strip.empty?
+    
+    row_class = is_best ? 'best-config' : ''
+    status_badge = if is_best
+      '<span class="badge badge-best">⭐ BEST</span>'
+    elsif has_results
+      '<span class="badge badge-completed">✓ Done</span>'
+    else
+      '<span class="badge badge-pending">⏳ Pending</span>'
+    end
+    
+    <<~HTML
+      <tr class="#{row_class}">
+        <td>#{row['experiment_id']}</td>
+        #{param_cols.map { |col| "<td>#{row[col]}</td>" }.join}
+        <td class="#{has_results && row['rmse'].to_f < 2.0 ? 'metric-good' : ''}">#{row['rmse'] || '-'}</td>
+        <td>#{row['mae'] || '-'}</td>
+        <td>#{row['r2'] || '-'}</td>
+        <td>#{status_badge}</td>
+      </tr>
+    HTML
+  end
+
   private
 
   def analyze_column(data, column)

@@ -20,6 +20,7 @@ require_relative 'lib/model_tracker'
 class CSVOrganizer < Thor
   desc "report FILE", "Generate HTML report with tables (no fancy charts)"
   option :output, aliases: :o, type: :string, desc: 'Output HTML file (default: FILE_report.html)'
+  option :type, aliases: :t, type: :string, default: 'auto', desc: 'Report type: data, hyperparam, or auto'
   def report(file)
     unless File.exist?(file)
       puts "✗ File not found: #{file}"
@@ -27,9 +28,24 @@ class CSVOrganizer < Thor
     end
     
     reporter = HTMLReporter.new
-    output_file = reporter.generate_diagnostic_report(file, options[:output])
+    
+    # Auto-detect report type based on file content
+    report_type = options[:type]
+    if report_type == 'auto'
+      # Check if file has hyperparameter tracking columns
+      headers = CSV.read(file, headers: true).headers
+      has_hyperparam_cols = (headers & ['experiment_id', 'rmse', 'mae', 'r2']).size >= 2
+      report_type = has_hyperparam_cols ? 'hyperparam' : 'data'
+    end
+    
+    output_file = if report_type == 'hyperparam'
+      reporter.generate_hyperparam_report(file, options[:output])
+    else
+      reporter.generate_diagnostic_report(file, options[:output])
+    end
     
     puts "✓ HTML report generated: #{output_file}"
+    puts "  Type: #{report_type}"
     puts "\nOpening in browser..."
     
     # Open in default browser
@@ -39,6 +55,55 @@ class CSVOrganizer < Thor
       system("open #{output_file}")
     elsif RbConfig::CONFIG['host_os'] =~ /linux|bsd/
       system("xdg-open #{output_file}")
+    end
+  end
+
+  desc "report-all", "Generate HTML reports for all model hyperparameter CSV files"
+  option :pattern, aliases: :p, type: :string, default: 'model*.csv', desc: 'File pattern to match'
+  option :open, type: :boolean, default: false, desc: 'Open all reports in browser'
+  def report_all
+    pattern = options[:pattern]
+    files = Dir.glob(pattern)
+    
+    if files.empty?
+      puts "✗ No files found matching pattern: #{pattern}"
+      exit 1
+    end
+    
+    puts "Found #{files.size} hyperparameter file(s):\n"
+    
+    reporter = HTMLReporter.new
+    reports = []
+    
+    files.each do |file|
+      puts "  Processing: #{file}"
+      
+      # Check if it's a hyperparameter file
+      headers = CSV.read(file, headers: true).headers
+      has_hyperparam_cols = (headers & ['experiment_id', 'rmse', 'mae', 'r2']).size >= 2
+      
+      if has_hyperparam_cols
+        output_file = reporter.generate_hyperparam_report(file, nil)
+        reports << output_file
+        puts "    ✓ Report: #{output_file}"
+      else
+        puts "    ⚠ Skipped (not a hyperparameter file)"
+      end
+    end
+    
+    puts "\n✓ Generated #{reports.size} report(s)"
+    
+    if options[:open] && reports.any?
+      puts "\nOpening reports in browser..."
+      reports.each do |report|
+        if RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/
+          system("start #{report}")
+        elsif RbConfig::CONFIG['host_os'] =~ /darwin/
+          system("open #{report}")
+        elsif RbConfig::CONFIG['host_os'] =~ /linux|bsd/
+          system("xdg-open #{report}")
+        end
+      end
     end
   end
 
