@@ -1,0 +1,11 @@
+k_factor,initial_rating,home_advantage,mov_multiplier,mov_method,season_carryover,ot_win_multiplier,rest_advantage_per_day,b2b_penalty,experiment_id,rmse,mae,r2,notes,timestamp
+20,1500,100,1.5,linear,0.67,1.0,10,50,1,,,,,
+40,1500,50,1.0,logarithmic,0.85,1.0,10,50,2,,,,,
+32,1500,50,0.0,linear,0.67,1.0,0,50,3,,,,,
+20,1500,100,1.5,linear,0.85,1.0,10,50,4,,,,,
+20,1500,100,0.0,linear,0.85,1.0,10,50,5,,,,,
+20,1500,100,1.5,logarithmic,0.75,0.75,0,50,6,,,,,
+40,1500,150,1.5,logarithmic,0.67,0.75,10,0,7,,,,,
+32,1500,50,1.5,logarithmic,0.75,0.75,0,0,8,,,,,
+40,1500,150,1.0,logarithmic,0.75,1.0,0,0,9,,,,,
+32,1500,50,1.0,linear,0.75,0.75,0,50,10,,,,,

@@ -1,7 +1,8 @@
 model_name: model2_linear_regression
-description: Linear regression with team ratings and home advantage
+description: Linear regression with ElasticNet regularization for hockey predictions
 
 hyperparameters:
+  # Regularization strength (MOST IMPORTANT)
   alpha:
     - 0.001
     - 0.01
@@ -9,42 +10,51 @@ hyperparameters:
     - 1.0
     - 10.0
   
+  # L1/L2 ratio (MOST IMPORTANT)
   l1_ratio:
-    - 0.0      # Ridge
-    - 0.25
-    - 0.5
-    - 0.75
-    - 1.0      # Lasso
+    - 0.0      # Pure Ridge (L2)
+    - 0.5      # Equal L1 and L2
+    - 1.0      # Pure Lasso (L1)
   
+  # Model structure
   fit_intercept:
     - true
-    - false
   
-  normalize:
-    - true
-    - false
+  # Solver options
+  solver:
+    - auto
+    - saga
   
+  # Convergence
   max_iter:
     - 1000
     - 5000
-    - 10000
   
-  tol:
-    - 0.0001
-    - 0.001
-    - 0.01
+  # Polynomial features
+  poly_degree:
+    - 1        # Linear only
+    - 2        # Add quadratic terms
+  
+  # Feature scaling (IMPORTANT)
+  scaling:
+    - standard     # StandardScaler
+    - robust       # RobustScaler
 
 defaults:
   alpha: 1.0
   l1_ratio: 0.5
   fit_intercept: true
-  normalize: false
+  solver: auto
   max_iter: 1000
-  tol: 0.0001
+  poly_degree: 1
+  scaling: standard
 
 notes: |
-  Use ElasticNet for regularization (combination of L1 and L2).
-  alpha controls overall regularization strength.
-  l1_ratio=0 is pure Ridge, l1_ratio=1 is pure Lasso.
+  Reduced to core parameters for efficient tuning.
+  Total grid size: 5 * 3 * 2 * 2 * 2 = 120 combinations
   
-  Start with defaults, then tune alpha based on validation performance.
+  Focus on:
+  - alpha: regularization strength
+  - l1_ratio: feature selection vs shrinkage
+  - poly_degree: non-linear relationships
+  - scaling: preprocessing method

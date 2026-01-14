@@ -2,88 +2,155 @@ model_name: model4_xgboost
 description: XGBoost for industry-standard accuracy
 
 hyperparameters:
+  # Learning rate (MOST IMPORTANT)
   learning_rate:
-    - 0.001
     - 0.01
     - 0.05
     - 0.1
-    - 0.3
   
+  # Number of trees (MOST IMPORTANT)
   n_estimators:
     - 100
-    - 200
     - 500
     - 1000
-    - 2000
   
+  # Tree depth (IMPORTANT)
   max_depth:
     - 3
-    - 4
-    - 5
     - 6
-    - 7
-    - 8
+    - 9
   
+  # Regularization
   min_child_weight:
     - 1
-    - 3
     - 5
-    - 7
   
   gamma:
     - 0
     - 0.1
-    - 0.2
-    - 0.5
   
+  # Sampling
   subsample:
-    - 0.5
-    - 0.6
     - 0.7
-    - 0.8
-    - 0.9
     - 1.0
   
   colsample_bytree:
-    - 0.5
-    - 0.6
-    - 0.7
-    - 0.8
-    - 0.9
-    - 1.0
-  
-  colsample_bylevel:
-    - 0.5
     - 0.7
     - 1.0
   
+  # L1/L2 regularization
   reg_alpha:
     - 0
-    - 0.01
     - 0.1
-    - 1
   
   reg_lambda:
-    - 0
-    - 0.1
     - 1
     - 10
+
+defaults:
+  learning_rate: 0.05
+  n_estimators: 500
+  max_depth: 6
+  min_child_weight: 3
+  gamma: 0.1
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_alpha: 0.1
+  reg_lambda: 1.0
+
+notes: |
+  Reduced to core parameters for efficient tuning.
+  Total grid size: 3 * 3 * 3 * 2 * 2 * 2 * 2 * 2 * 2 = 864 combinations
   
-  scale_pos_weight:
-    - 0.5
-    - 1.0
-    - 2.0
+  Use random search instead of full grid!
+  ruby cli.rb hyperparam-random config/hyperparams/model4_xgboost.yaml 50
+
+  # Early stopping
+  early_stopping_rounds:
+    - 10
+    - 25
+    - 50
+    - 100
   
-  booster:
-    - gbtree
-    - gblinear
-    - dart
+  # Objective function
+  objective:
+    - reg:squarederror     # RMSE
+    - reg:squaredlogerror  # Log loss
+    - reg:pseudohubererror # Robust to outliers
   
+  # Evaluation metric
+  eval_metric:
+    - rmse
+    - mae
+    - mape
+  
+  # Maximum delta step
+  max_delta_step:
+    - 0        # No constraint
+    - 1
+    - 5
+    - 10
+  
+  # Base score (initial prediction)
+  base_score:
+    - 0.5      # Default
+    - null     # Auto-calculate from data
+  
+  # Interaction constraints
+  interaction_constraints:
+    - null     # No constraints
+  
+  # Monotone constraints
+  monotone_constraints:
+    - null     # No constraints
+  
+  # Feature importance type
+  importance_type:
+    - gain
+    - weight
+    - cover
+    - total_gain
+    - total_cover
+  
+  # Seed for reproducibility
+  random_state:
+    - 42
+    - 123
+    - 2024
+  
+  # Number of parallel threads
+  n_jobs:
+    - -1       # Use all cores
+    - 4
+    - 8
+  
+  # GPU acceleration
   tree_method:
     - auto
     - exact
     - approx
-    - hist
+    - hist     # Faster for large datasets
+    - gpu_hist # Use GPU if available
+  
+  # DART specific parameters
+  sample_type:
+    - uniform
+    - weighted
+  
+  normalize_type:
+    - tree
+    - forest
+  
+  rate_drop:
+    - 0.0
+    - 0.1
+    - 0.3
+    - 0.5
+  
+  skip_drop:
+    - 0.0
+    - 0.3
+    - 0.5
 
 defaults:
   learning_rate: 0.05
@@ -98,6 +165,21 @@ defaults:
   reg_lambda: 1.0
   scale_pos_weight: 1.0
   booster: gbtree
+  early_stopping_rounds: 50
+  objective: reg:squarederror
+  eval_metric: rmse
+  max_delta_step: 0
+  base_score: null
+  interaction_constraints: null
+  monotone_constraints: null
+  importance_type: gain
+  random_state: 42
+  n_jobs: -1
+  tree_method: hist
+  sample_type: uniform
+  normalize_type: tree
+  rate_drop: 0.0
+  skip_drop: 0.0
   tree_method: hist
   early_stopping_rounds: 50
 

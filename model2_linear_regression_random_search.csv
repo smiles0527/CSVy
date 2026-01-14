@@ -1,0 +1,6 @@
+alpha,l1_ratio,fit_intercept,solver,max_iter,poly_degree,scaling,experiment_id,rmse,mae,r2,notes,timestamp
+1.0,0.0,true,auto,5000,2,robust,1,,,,,
+0.001,0.0,true,auto,1000,1,standard,2,,,,,
+1.0,0.0,true,auto,5000,1,robust,3,,,,,
+0.1,0.5,true,auto,1000,2,robust,4,,,,,
+10.0,0.0,true,saga,1000,1,robust,5,,,,,

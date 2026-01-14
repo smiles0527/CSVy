@@ -2,52 +2,204 @@ model_name: model5_ensemble
 description: Optimal ensemble combining all models
 
 hyperparameters:
+  # Weighting method (MOST IMPORTANT)
   weight_method:
     - inverse_rmse    # Weight inversely to error
-    - inverse_mae
     - softmax         # Softmax of negative errors
     - equal           # Simple average
-    - rank_based      # Weight by ranking
-    - learned         # Train meta-learner
   
-  normalize_weights:
-    - true
-    - false
-  
+  # Meta-learner type
   meta_learner:
-    - linear
     - ridge
-    - lasso
     - elastic_net
-    - gradient_boosting
   
+  # Meta-learner regularization
   meta_alpha:
-    - 0.001
     - 0.01
     - 0.1
     - 1.0
   
+  # Use original features
   use_base_features:
-    - true            # Pass original features to meta-learner
-    - false           # Only use model predictions
+    - true
+    - false
   
-  trim_extreme:
-    - 0.0             # Don't trim
-    - 0.1             # Trim 10% most extreme
-    - 0.2
-  
-  voting:
-    - soft            # Average probabilities
-    - hard            # Majority vote
-  
+  # Cross-validation
   cv_folds:
     - 5
-    - 10
+
+defaults:
+  weight_method: inverse_rmse
+  meta_learner: ridge
+  meta_alpha: 0.1
+  use_base_features: false
+  cv_folds: 5
+
+notes: |
+  Reduced to core parameters for efficient tuning.
+  Total grid size: 3 * 2 * 3 * 2 = 36 combinations
   
   optimize_metric:
     - rmse
     - mae
     - r2
+    - mape
+  
+  # Stacking method
+  stacking_method:
+    - holdout          # Simple train/val split
+    - cv               # Cross-validation predictions
+    - blending         # Blend on separate holdout set
+  
+  # Final estimator (after meta-learner)
+  final_estimator:
+    - mean
+    - median
+    - weighted_mean
+    - meta_model
+  
+  # Meta-learner cross-validation
+  meta_cv_folds:
+    - 3
+    - 5
+    - 10
+  
+  # Passthrough features to meta-learner
+  passthrough:
+    - true             # Include original features
+    - false            # Only predictions
+  
+  # Model selection criteria
+  model_selection:
+    - all              # Use all base models
+    - top_k            # Use top K performers
+    - threshold        # Use models above threshold
+  
+  top_k:
+    - 2
+    - 3
+    - 4
+  
+  performance_threshold:
+    - 0.8              # Use models with R² > 0.8
+    - 0.85
+    - 0.9
+  
+  # Diversity penalty
+  diversity_weight:
+    - 0.0              # No diversity bonus
+    - 0.1
+    - 0.2
+    - 0.5              # Strong diversity preference
+  
+  # Correlation threshold
+  max_correlation:
+    - 0.7              # Drop highly correlated predictions
+    - 0.8
+    - 0.9
+    - 1.0              # No correlation filtering
+  
+  # Weight optimization method
+  weight_optimization:
+    - brute_force      # Try all combinations
+    - scipy_minimize   # Use scipy.optimize
+    - gradient_descent # Custom GD
+    - bayesian         # Bayesian optimization
+  
+  # Weight constraints
+  weight_bounds:
+    - null             # No bounds
+    - [0, 1]           # Non-negative, sum to 1
+    - [-1, 1]          # Allow negative weights
+  
+  # Regularization for weight optimization
+  weight_regularization:
+    - none
+    - l1               # Sparse weights (feature selection)
+    - l2               # Smooth weights
+  
+  weight_reg_alpha:
+    - 0.0
+    - 0.01
+    - 0.1
+    - 1.0
+  
+  # Quantile regression for uncertainty
+  quantile_regression:
+    - false
+    - true
+  
+  quantiles:
+    - [0.05, 0.95]     # 90% prediction interval
+    - [0.1, 0.9]       # 80% prediction interval
+    - [0.25, 0.75]     # 50% prediction interval
+  
+  # Confidence weighting
+  confidence_weighting:
+    - false
+    - true
+  
+  # Model-specific confidence
+  use_model_uncertainty:
+    - false
+    - true
+  
+  # Temporal ensembling (for time-series)
+  temporal_smoothing:
+    - false
+    - true
+  
+  smoothing_window:
+    - 3
+    - 5
+    - 7
+  
+  # Adaptive weighting (change over time)
+  adaptive_weights:
+    - false            # Fixed weights
+    - true             # Adjust based on recent performance
+  
+  adaptation_rate:
+    - 0.01
+    - 0.05
+    - 0.1
+  
+  adaptation_window:
+    - 10               # Last 10 predictions
+    - 20
+    - 50
+  
+  # Outlier handling in ensemble
+  outlier_method:
+    - none
+    - winsorize        # Cap extreme predictions
+    - trim             # Remove extreme predictions
+    - robust_mean      # Use median or trimmed mean
+  
+  winsorize_limits:
+    - [0.05, 0.05]     # Trim 5% from each tail
+    - [0.1, 0.1]
+    - [0.2, 0.2]
+  
+  # Ensemble size optimization
+  optimize_ensemble_size:
+    - false
+    - true
+  
+  min_ensemble_size:
+    - 2
+    - 3
+  
+  max_ensemble_size:
+    - null             # Use all models
+    - 5
+    - 10
+  
+  # Random state
+  random_state:
+    - 42
+    - 123
+    - 2024
 
 defaults:
   weight_method: inverse_rmse

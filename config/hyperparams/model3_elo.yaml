@@ -1,51 +1,74 @@
 model_name: model3_elo
-description: ELO rating system with dynamic updates
+description: ELO rating system with margin-of-victory and dynamic K-factor
 
 hyperparameters:
+  # Base K-factor (MOST IMPORTANT)
   k_factor:
-    - 16
     - 20
-    - 24
     - 32
     - 40
   
+  # Initial team ratings
   initial_rating:
-    - 1400
     - 1500
-    - 1600
   
+  # Home ice advantage (IMPORTANT)
   home_advantage:
-    - 0
     - 50
-    - 75
     - 100
     - 150
   
+  # Margin of Victory adjustment (IMPORTANT)
   mov_multiplier:
     - 0.0      # Ignore goal differential
-    - 0.5
-    - 1.0
+    - 1.0      # Linear with goal diff
     - 1.5
-    - 2.0      # Heavy weight on goal differential
   
+  mov_method:
+    - linear
+    - logarithmic
+  
+  # Season carryover
   season_carryover:
-    - 0.5      # 50% regression to mean
     - 0.67
     - 0.75
-    - 1.0      # Full carryover
+    - 0.85
   
-  regression_mean:
-    - 1400
-    - 1500
-    - 1600
+  # Overtime/Shootout
+  ot_win_multiplier:
+    - 0.75
+    - 1.0
+  
+  # Rest days advantage
+  rest_advantage_per_day:
+    - 0
+    - 10
+  
+  # Back-to-back penalty
+  b2b_penalty:
+    - 0
+    - 50
 
 defaults:
   k_factor: 32
   initial_rating: 1500
   home_advantage: 100
   mov_multiplier: 1.0
+  mov_method: logarithmic
   season_carryover: 0.75
-  regression_mean: 1500
+  ot_win_multiplier: 0.75
+  rest_advantage_per_day: 10
+  b2b_penalty: 50
+
+notes: |
+  Reduced to core parameters for efficient tuning.
+  Total grid size: 3 * 3 * 3 * 2 * 3 * 2 * 2 * 2 = 648 combinations
+  
+  Focus on:
+  - k_factor: rating volatility
+  - home_advantage: home ice effect
+  - mov_multiplier/method: blowout weighting
+  - season_carryover: year-to-year regression
 
 notes: |
   K-factor: Higher = ratings change more per game (more volatile)
