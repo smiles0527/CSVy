@@ -364,9 +364,10 @@ class AdvancedFeatures
     data.each do |row|
       streak_str = row[streak_col].to_s.upcase.strip
       
-      if streak_str.match?(/^([WL])(\d+)$/)
-        type = $1
-        length = $2.to_i
+      # Use =~ or capture MatchData instead of match?
+      if md = streak_str.match(/^([WL])(\d+)$/)
+        type = md[1]
+        length = md[2].to_i
         
         row['streak_type'] = type == 'W' ? 1 : -1
         row['streak_length'] = length
@@ -390,10 +391,11 @@ class AdvancedFeatures
     data.each do |row|
       l10_str = row[l10_col].to_s.strip
       
-      if l10_str.match?(/^(\d+)-(\d+)-(\d+)$/)
-        wins = $1.to_i
-        losses = $2.to_i
-        ot = $3.to_i
+      # Use =~ or capture MatchData instead of match?
+      if md = l10_str.match(/^(\d+)-(\d+)-(\d+)$/)
+        wins = md[1].to_i
+        losses = md[2].to_i
+        ot = md[3].to_i
         
         total = wins + losses + ot
         row['l10_wins'] = wins
@@ -422,9 +424,10 @@ class AdvancedFeatures
     data.each do |row|
       so_str = row[so_col].to_s.strip
       
-      if so_str.match?(/^(\d+)-(\d+)$/)
-        wins = $1.to_i
-        losses = $2.to_i
+      # Use =~ or capture MatchData instead of match?
+      if md = so_str.match(/^(\d+)-(\d+)$/)
+        wins = md[1].to_i
+        losses = md[2].to_i
         total = wins + losses
         
         row['so_wins'] = wins

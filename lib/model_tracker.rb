@@ -165,9 +165,7 @@ class ModelTracker
     output_file
   end
 
-  private
-
-  # Automated model selection based on validation metrics
+  # Automated model selection based on validation metrics (public method)
   def select_best_model(tracking_files, metric: :rmse, criteria: :best)
     logger.info "Selecting best model based on #{metric} (#{criteria} criteria)"
     
@@ -210,6 +208,8 @@ class ModelTracker
       selection_criteria: "#{criteria} #{metric}"
     }
   end
+
+  private
 
   def calculate_std_dev(values)
     mean = values.sum / values.size.to_f

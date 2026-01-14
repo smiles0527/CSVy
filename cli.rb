@@ -944,6 +944,14 @@ class CSVOrganizer < Thor
     end
     
     data = CSV.read(predictions_csv, headers: true)
+    
+    # Guard against missing prediction column
+    unless data.headers.include?(options[:pred_col])
+      puts "✗ Column '#{options[:pred_col]}' not found in CSV"
+      puts "Available columns: #{data.headers.join(', ')}"
+      exit 1
+    end
+    
     predictions = data[options[:pred_col]].map(&:to_f)
     
     output_file = options[:output] || predictions_csv.gsub('.csv', "_#{options[:format]}.txt")

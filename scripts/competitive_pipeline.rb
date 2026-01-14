@@ -36,6 +36,12 @@ class CompetitivePreprocessor
     @logger.info "\n[1/7] Loading and cleaning data..."
     data = CSV.read(@input_file, headers: true).map(&:to_h)
     
+    # Guard against empty CSV
+    if data.empty?
+      @logger.error "CSV file is empty or contains only headers"
+      return nil
+    end
+    
     # Detect data type (standings vs game-level)
     is_game_level = data.first.key?('date') || data.first.key?('game_date') || data.first.key?('home_team')
     team_col = detect_column(data, ['Team', 'team', 'team_name', 'home_team', 'away_team'])
@@ -165,7 +171,8 @@ class CompetitivePreprocessor
           row['home_win_rate'] = home_total > 0 ? (home_wins / home_total).round(3) : 0.5
           row['away_win_rate'] = away_total > 0 ? (away_wins / away_total).round(3) : 0.5
           row['home_away_diff'] = (row['home_win_rate'].to_f - row['away_win_rate'].to_f).round(3)
-        rescue
+        rescue StandardError => e
+          @logger.warn "Failed to parse HOME/AWAY record: #{e.message}"
           row['home_win_rate'] = 0.5
           row['away_win_rate'] = 0.5
           row['home_away_diff'] = 0.0
@@ -421,9 +428,11 @@ class CompetitivePreprocessor
   
   def fill_missing_numeric(data, columns)
     columns.each do |col|
-      values = data.map { |r| r[col].to_f }.reject(&:zero?)
+      # Only treat nil/empty as missing, include zeros in mean calculation
+      values = data.map { |r| r[col] }.reject { |v| v.nil? || v.to_s.strip.empty? }.map(&:to_f)
       mean = values.any? ? values.sum / values.size : 0
-      data.each { |r| r[col] = mean if r[col].to_s.strip.empty? || r[col].to_f.zero? }
+      # Only fill truly missing values (nil or empty), not zeros
+      data.each { |r| r[col] = mean if r[col].nil? || r[col].to_s.strip.empty? }
     end
     data
   end
@@ -443,11 +452,14 @@ class CompetitivePreprocessor
   end
   
   def parse_date(date_str)
-    return Date.today if date_str.nil? || date_str.to_s.strip.empty?
+    if date_str.nil? || date_str.to_s.strip.empty?
+      @logger.warn "Missing date value, using epoch sentinel"
+      return Date.new(1970, 1, 1)  # Sentinel value to prevent data leakage
+    end
     Date.parse(date_str.to_s)
-  rescue => e
-    @logger.warn "Could not parse date '#{date_str}': #{e.message}, using today"
-    Date.today
+  rescue ArgumentError => e
+    @logger.error "Unparseable date '#{date_str}': #{e.message}"
+    Date.new(1970, 1, 1)  # Sentinel value - filter these rows if needed
   end
   
   def safe_float(value, default: 0.0)
