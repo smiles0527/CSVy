@@ -28,7 +28,7 @@ class DataPreprocessor
     # Remove original column
     data.each { |row| row.delete(column_name) }
     
-    logger.info "One-hot encoding complete. Original column preserved, added #{unique_values.length} encoded columns"
+    logger.info "One-hot encoding complete. Removed original column and added #{unique_values.length} encoded columns"
     data
   end
 

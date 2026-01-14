@@ -29,7 +29,7 @@ class HyperparameterManager
       # Load config if @params is empty
       if @params.empty? && File.exist?(config_file)
         require 'yaml'
-        @params = YAML.load_file(config_file)
+        @params = YAML.safe_load_file(config_file, permitted_classes: [Symbol], aliases: true)
       end
       
       results = []
@@ -42,7 +42,7 @@ class HyperparameterManager
       end
       
       # Save to file if specified
-      if output_file
+      if output_file && !results.empty?
         CSV.open(output_file, 'w') do |csv|
           csv << results.first.keys
           results.each { |r| csv << r.values }
@@ -122,7 +122,7 @@ class HyperparameterManager
       data = []
       if File.exist?(tracking_file)
         require 'yaml'
-        data = YAML.load_file(tracking_file) || []
+        data = YAML.safe_load_file(tracking_file, permitted_classes: [Symbol, Time], aliases: true) || []
       end
       
       # Add new result

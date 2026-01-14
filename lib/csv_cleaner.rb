@@ -19,7 +19,7 @@ class CSVCleaner
   end
 
   def clean_data
-    logger.info "Starting data cleaning process with side-by-side comparison"
+    logger.info "Starting data cleaning process"
     
     # Remove empty rows
     non_empty_data = @data.reject do |row|
@@ -48,8 +48,7 @@ class CSVCleaner
     end
     
     result_data = CSV::Table.new(result_rows)
-    logger.info "Cleaning complete with comparison columns added"
-    logger.info "Original columns preserved, cleaned versions added with '_cleaned' suffix"
+    logger.info "Cleaning complete: removed empty rows, trimmed whitespace, and removed duplicates"
     result_data
   end
   
