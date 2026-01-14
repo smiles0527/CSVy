@@ -15,6 +15,7 @@ require_relative 'lib/html_reporter'
 require_relative 'lib/advanced_features'
 require_relative 'lib/model_validator'
 require_relative 'lib/ensemble_builder'
+require_relative 'lib/model_tracker'
 
 class CSVOrganizer < Thor
   desc "report FILE", "Generate HTML report with tables (no fancy charts)"
@@ -529,45 +530,58 @@ class CSVOrganizer < Thor
   option :iterations, aliases: :i, type: :numeric, default: 20, desc: 'Total iterations'
   option :initial, type: :numeric, default: 5, desc: 'Initial random samples'
   option :acquisition, aliases: :a, type: :string, default: 'ei', desc: 'Acquisition function (ei, ucb, poi)'
+  option :output, aliases: :o, type: :string, desc: 'Output CSV file'
   def hyperparam_bayesian(config_file)
     hpm = HyperparameterManager.new
     output = hpm.bayesian_optimize(
       config_file,
       n_iterations: options[:iterations],
       n_initial: options[:initial],
-      acquisition: options[:acquisition]
+      acquisition: options[:acquisition],
+      output_file: options[:output]
     )
     puts "✓ Bayesian optimization complete: #{output}"
+    puts "  Generated #{options[:iterations]} configurations"
+    puts "  Next: Train models and use 'add-result' to record metrics"
   end
 
   desc "hyperparam-genetic CONFIG_FILE", "Genetic algorithm optimization"
   option :population, aliases: :p, type: :numeric, default: 20, desc: 'Population size'
   option :generations, aliases: :g, type: :numeric, default: 10, desc: 'Number of generations'
   option :mutation, aliases: :m, type: :numeric, default: 0.1, desc: 'Mutation rate (0.0-1.0)'
+  option :output, aliases: :o, type: :string, desc: 'Output CSV file'
   def hyperparam_genetic(config_file)
     hpm = HyperparameterManager.new
     output = hpm.genetic_algorithm(
       config_file,
       population_size: options[:population],
       generations: options[:generations],
-      mutation_rate: options[:mutation]
+      mutation_rate: options[:mutation],
+      output_file: options[:output]
     )
+    total_configs = options[:population] + (options[:population] / 2) * options[:generations]
     puts "✓ Genetic algorithm complete: #{output}"
+    puts "  Generated ~#{total_configs} configurations"
+    puts "  Next: Train models and use 'add-result' to record metrics"
   end
 
   desc "hyperparam-annealing CONFIG_FILE", "Simulated annealing optimization"
   option :iterations, aliases: :i, type: :numeric, default: 100, desc: 'Number of iterations'
   option :temp, aliases: :t, type: :numeric, default: 1.0, desc: 'Initial temperature'
   option :cooling, aliases: :c, type: :numeric, default: 0.95, desc: 'Cooling rate (0.0-1.0)'
+  option :output, aliases: :o, type: :string, desc: 'Output CSV file'
   def hyperparam_annealing(config_file)
     hpm = HyperparameterManager.new
     output = hpm.simulated_annealing(
       config_file,
       n_iterations: options[:iterations],
       initial_temp: options[:temp],
-      cooling_rate: options[:cooling]
+      cooling_rate: options[:cooling],
+      output_file: options[:output]
     )
     puts "✓ Simulated annealing complete: #{output}"
+    puts "  Generated #{options[:iterations] + 1} configurations"
+    puts "  Next: Train models and use 'add-result' to record metrics"
   end
 
   desc "add-result TRACKING_FILE EXPERIMENT_ID", "Add experiment results to tracking file"
@@ -713,6 +727,7 @@ class CSVOrganizer < Thor
   option :actuals, type: :string, required: true, desc: 'CSV file with actual values'
   option :actual_col, type: :string, default: 'actual', desc: 'Actual values column'
   option :output, aliases: :o, type: :string, desc: 'Output file for optimal weights'
+  option :method, aliases: :m, type: :string, default: 'inverse_rmse', desc: 'Weight method: inverse_rmse, softmax, equal, grid_search'
   def ensemble_optimize(predictions_dir)
     unless Dir.exist?(predictions_dir)
       puts "✗ Directory not found: #{predictions_dir}"
@@ -747,13 +762,16 @@ class CSVOrganizer < Thor
     ensemble = EnsembleOptimizer.new
     
     # Calculate optimal weights
-    result = ensemble.optimize_ensemble_weights(model_predictions.values, actuals)
+    method = options[:method].to_sym rescue :inverse_rmse
+    result = ensemble.optimize_ensemble_weights(model_predictions.values, actuals, method: method)
     
     puts "\n=== Optimal Ensemble Weights ==="
     model_predictions.keys.each_with_index do |model, idx|
       puts "  #{model}: #{result[:optimal_weights][idx].round(4)}"
     end
-    puts "\nBest RMSE: #{result[:best_rmse].round(4)}"
+    puts "\nEnsemble RMSE: #{result[:best_rmse].round(4)}"
+    puts "Best individual RMSE: #{result[:baseline_rmse].round(4)}"
+    puts "Improvement: #{result[:improvement].round(4)} (#{result[:improvement_pct].round(2)}%)"
     
     # Save weights if output specified
     if options[:output]
@@ -786,6 +804,168 @@ class CSVOrganizer < Thor
     puts "  2. Pull in DeepNote and train models"
     puts "  3. Track results: ruby cli.rb add-result <tracking_file> <experiment_id> --rmse X --mae Y"
     puts "  4. Find best params: ruby cli.rb best-params <tracking_file> --metric rmse"
+  end
+
+  desc "feature-correlation FILE TARGET_COL", "Analyze feature correlations with target column"
+  option :output, aliases: :o, type: :string, desc: 'Output CSV file for correlations'
+  def feature_correlation(file, target_col)
+    unless File.exist?(file)
+      puts "✗ File not found: #{file}"
+      exit 1
+    end
+    
+    puts "📊 Analyzing feature correlations..."
+    
+    data = CSV.read(file, headers: true).map(&:to_h)
+    af = AdvancedFeatures.new
+    
+    # Get all numeric feature columns
+    feature_cols = data.first.keys.reject { |k| k == target_col || k.match?(/^(experiment_id|timestamp|notes)$/i) }
+    
+    correlations = af.analyze_feature_correlations(data, target_col, feature_cols)
+    
+    # Save to CSV if output specified
+    if options[:output]
+      CSV.open(options[:output], 'w') do |csv|
+        csv << ['feature', 'correlation', 'abs_correlation']
+        correlations.sort_by { |k, v| -v.abs }.each do |feature, corr|
+          csv << [feature, corr, corr.abs]
+        end
+      end
+      puts "✓ Correlations saved to: #{options[:output]}"
+    end
+  end
+
+  desc "model-track TRACKING_FILE", "Track and analyze model performance"
+  option :output, aliases: :o, type: :string, desc: 'Output JSON file'
+  def model_track(tracking_file)
+    unless File.exist?(tracking_file)
+      puts "✗ File not found: #{tracking_file}"
+      exit 1
+    end
+    
+    tracker = ModelTracker.new
+    stats = tracker.track_model_performance(tracking_file, options[:output])
+    
+    if stats
+      puts "\n=== Model Performance Summary ==="
+      puts "Completed: #{stats[:completed_experiments]}/#{stats[:total_experiments]} (#{stats[:completion_rate]}%)"
+      puts "Best RMSE: #{stats[:rmse][:best].round(4)}"
+      puts "Mean RMSE: #{stats[:rmse][:mean].round(4)}"
+      puts "Top 10 experiments: #{stats[:top_10_experiments].join(', ')}"
+    end
+  end
+
+  desc "model-compare TRACKING_FILES", "Compare multiple model tracking files"
+  option :output, aliases: :o, type: :string, default: 'model_comparison.json', desc: 'Output JSON file'
+  def model_compare(*tracking_files)
+    if tracking_files.empty?
+      puts "✗ Please provide at least one tracking file"
+      exit 1
+    end
+    
+    missing = tracking_files.reject { |f| File.exist?(f) }
+    unless missing.empty?
+      puts "✗ Files not found: #{missing.join(', ')}"
+      exit 1
+    end
+    
+    tracker = ModelTracker.new
+    comparison = tracker.compare_models(tracking_files, options[:output])
+    
+    puts "\n=== Model Comparison ==="
+    comparison[:models].each do |model, stats|
+      puts "#{model}:"
+      puts "  Best RMSE: #{stats[:best_rmse].round(4)}"
+      puts "  Mean RMSE: #{stats[:mean_rmse].round(4)}"
+      puts "  Completed: #{stats[:completed]}/#{stats[:total_configs]}"
+    end
+    puts "\n🏆 Best Model: #{comparison[:best_model]} (RMSE: #{comparison[:best_rmse].round(4)})"
+  end
+
+  desc "model-select TRACKING_FILES", "Automatically select best model based on validation metrics"
+  option :metric, aliases: :m, type: :string, default: 'rmse', desc: 'Metric: rmse, mae, r2'
+  option :criteria, aliases: :c, type: :string, default: 'best', desc: 'Criteria: best, mean, median'
+  def model_select(*tracking_files)
+    if tracking_files.empty?
+      puts "✗ Please provide at least one tracking file"
+      exit 1
+    end
+    
+    missing = tracking_files.reject { |f| File.exist?(f) }
+    unless missing.empty?
+      puts "✗ Files not found: #{missing.join(', ')}"
+      exit 1
+    end
+    
+    tracker = ModelTracker.new
+    selection = tracker.select_best_model(tracking_files, metric: options[:metric].to_sym, criteria: options[:criteria].to_sym)
+    
+    if selection
+      puts "\n=== Model Selection ==="
+      puts "Criteria: #{selection[:selection_criteria]}"
+      puts "\nAll Models:"
+      selection[:all_scores].sort_by { |_, score| score }.each do |model, score|
+        marker = model == selection[:best_model] ? "🏆" : "  "
+        puts "#{marker} #{model}: #{score.round(4)}"
+      end
+      puts "\nSelected: #{selection[:best_model]} (#{selection[:best_score].round(4)})"
+    else
+      puts "✗ No completed experiments found"
+    end
+  end
+
+  desc "model-report TRACKING_FILE", "Generate detailed performance report"
+  option :output, aliases: :o, type: :string, desc: 'Output text file'
+  def model_report(tracking_file)
+    unless File.exist?(tracking_file)
+      puts "✗ File not found: #{tracking_file}"
+      exit 1
+    end
+    
+    tracker = ModelTracker.new
+    report_file = tracker.generate_performance_report(tracking_file, options[:output])
+    
+    if report_file
+      puts "✓ Performance report generated: #{report_file}"
+      puts "\nPreview:"
+      puts File.read(report_file).lines.first(15).join
+    end
+  end
+
+  desc "export-predictions PREDICTIONS_CSV", "Export predictions in formats for Python/DeepNote"
+  option :format, aliases: :f, type: :string, default: 'numpy', desc: 'Format: numpy, pandas, json'
+  option :output, aliases: :o, type: :string, desc: 'Output file'
+  option :pred_col, type: :string, default: 'predicted', desc: 'Predictions column'
+  def export_predictions(predictions_csv)
+    unless File.exist?(predictions_csv)
+      puts "✗ File not found: #{predictions_csv}"
+      exit 1
+    end
+    
+    data = CSV.read(predictions_csv, headers: true)
+    predictions = data[options[:pred_col]].map(&:to_f)
+    
+    output_file = options[:output] || predictions_csv.gsub('.csv', "_#{options[:format]}.txt")
+    
+    case options[:format].downcase
+    when 'numpy'
+      File.write(output_file, "import numpy as np\npredictions = np.array([#{predictions.join(', ')}])\n")
+      
+    when 'pandas'
+      File.write(output_file, "import pandas as pd\npredictions = pd.Series([#{predictions.join(', ')}])\n")
+      
+    when 'json'
+      require 'json'
+      File.write(output_file, JSON.pretty_generate({ predictions: predictions }))
+      
+    else
+      puts "✗ Unknown format: #{options[:format]}"
+      exit 1
+    end
+    
+    puts "✓ Predictions exported to #{output_file} (#{options[:format]} format)"
+    puts "  #{predictions.size} predictions exported"
   end
 
   desc "diversity-analysis PREDICTIONS_DIR ACTUALS", "Analyze ensemble model diversity"

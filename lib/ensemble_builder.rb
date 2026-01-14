@@ -42,7 +42,7 @@ class EnsembleOptimizer
     logger.info "Blending predictions using #{method}"
     
     models = predictions_hash.keys
-    n_samples = predictions.values.first.size
+    n_samples = predictions_hash.values.first.size
     
     if weights.nil?
       # Equal weights
@@ -51,19 +51,19 @@ class EnsembleOptimizer
     
     blended_preds = []
     
-    predictions.first.size.times do |i|
-      weighted_sum = 0
+    n_samples.times do |i|
+      weighted_sum = 0.0
       
-      predictions.each_with_index do |(model, preds), idx|
-        weight = weights[idx]
-        pred = preds[i]
+      models.each do |model|
+        weight = weights[model] || (1.0 / models.size)
+        pred = predictions_hash[model][i]
         weighted_sum += pred * weight
       end
       
       blended_preds << weighted_sum
     end
     
-    blended
+    blended_preds
   end
 
   # Stacking (meta-model)
@@ -88,42 +88,87 @@ class EnsembleOptimizer
     }
   end
 
-  # Blend predictions with optimal weights
-  def optimize_ensemble_weights(predictions_arrays, actuals, method: :scipy)
-    logger.info "Optimizing ensemble weights"
+  # Optimize ensemble weights using multiple methods
+  def optimize_ensemble_weights(predictions_arrays, actuals, method: :inverse_rmse)
+    logger.info "Optimizing ensemble weights using #{method} method"
     
-    # Generate weight combinations to test
-    n_models = predictions_array.size
-    best_weights = nil
-    best_rmse = Float::INFINITY
+    n_models = predictions_arrays.size
+    n_samples = predictions_arrays.first.size
     
-    # Grid search over weight combinations
-    (0..10).to_a.repeated_permutation(predictions.size).each do |weights|
-      next if weights.sum == 0
-      
-      normalized = weights.map { |w| w / weights.sum.to_f }
-      
-      # Weighted ensemble prediction
-      ensemble_preds = predictions[0].size.times.map do |i|
-        predictions.each_with_index.map { |preds, j| preds[i] * normalized_weights[j] }.sum
-      end
-      
-      # Calculate RMSE
-      rmse = Math.sqrt(ensemble_preds.zip(actuals).map { |p, a| (p - a) ** 2 }.sum / actuals.size)
-      
-      if rmse < best_rmse
-        best_rmse = rmse
-        best_weights = weights.dup
-      end
+    # Calculate individual model RMSEs
+    model_rmses = predictions_arrays.map do |preds|
+      Math.sqrt(preds.zip(actuals).map { |p, a| (p - a) ** 2 }.sum / n_samples)
     end
     
-    logger.info "Optimal weights found: #{best_weights.inspect}"
-    logger.info "Best RMSE: #{best_rmse.round(4)}"
+    logger.info "Individual model RMSEs: #{model_rmses.map { |r| r.round(4) }}"
+    
+    case method.to_sym
+    when :inverse_rmse
+      # Weight inversely proportional to RMSE (better models get higher weight)
+      weights = model_rmses.map { |rmse| 1.0 / (rmse + 1e-6) }
+      normalized_weights = weights.map { |w| w / weights.sum }
+      
+    when :softmax
+      # Softmax weighting (exponential of negative RMSE)
+      weights = model_rmses.map { |rmse| Math.exp(-rmse) }
+      normalized_weights = weights.map { |w| w / weights.sum }
+      
+    when :equal
+      # Equal weights
+      normalized_weights = Array.new(n_models, 1.0 / n_models)
+      
+    when :grid_search
+      # Grid search over weight space (coarse grid for speed)
+      best_weights = nil
+      best_rmse = Float::INFINITY
+      
+      # Generate weight combinations (normalized to sum to 1)
+      step = 0.1
+      (0..10).to_a.repeated_permutation(n_models).each do |weights|
+        next if weights.sum == 0
+        normalized = weights.map { |w| w / weights.sum.to_f }
+        
+        # Calculate ensemble predictions
+        ensemble_preds = n_samples.times.map do |i|
+          predictions_arrays.each_with_index.map { |preds, j| preds[i] * normalized[j] }.sum
+        end
+        
+        # Calculate RMSE
+        rmse = Math.sqrt(ensemble_preds.zip(actuals).map { |p, a| (p - a) ** 2 }.sum / n_samples)
+        
+        if rmse < best_rmse
+          best_rmse = rmse
+          best_weights = normalized.dup
+        end
+      end
+      
+      normalized_weights = best_weights
+      
+    else
+      # Default to inverse RMSE
+      weights = model_rmses.map { |rmse| 1.0 / (rmse + 1e-6) }
+      normalized_weights = weights.map { |w| w / weights.sum }
+    end
+    
+    # Calculate ensemble RMSE with optimal weights
+    ensemble_preds = n_samples.times.map do |i|
+      predictions_arrays.each_with_index.map { |preds, j| preds[i] * normalized_weights[j] }.sum
+    end
+    
+    ensemble_rmse = Math.sqrt(ensemble_preds.zip(actuals).map { |p, a| (p - a) ** 2 }.sum / n_samples)
+    baseline_rmse = model_rmses.min
+    
+    logger.info "Optimal weights: #{normalized_weights.map { |w| w.round(4) }}"
+    logger.info "Ensemble RMSE: #{ensemble_rmse.round(4)}"
+    logger.info "Best individual RMSE: #{baseline_rmse.round(4)}"
+    logger.info "Improvement: #{(baseline_rmse - ensemble_rmse).round(4)} (#{((baseline_rmse - ensemble_rmse) / baseline_rmse * 100).round(2)}%)"
     
     {
-      optimal_weights: best_weights,
-      best_rmse: best_rmse,
-      improvement: baseline_rmse - best_rmse
+      optimal_weights: normalized_weights,
+      best_rmse: ensemble_rmse,
+      baseline_rmse: baseline_rmse,
+      improvement: baseline_rmse - ensemble_rmse,
+      improvement_pct: (baseline_rmse - ensemble_rmse) / baseline_rmse * 100
     }
   end
 
@@ -131,28 +176,34 @@ class EnsembleOptimizer
   def create_voting_ensemble(predictions_array, weights: nil, method: :soft)
     logger.info "Creating voting ensemble (#{method} voting)"
     
-    n_models = predictions.first.size
-    n_samples = predictions.size
+    n_models = predictions_array.size
+    n_samples = predictions_array.first.size
+    
+    weights ||= Array.new(n_models, 1.0 / n_models)
+    weight_sum = weights.sum
+    normalized_weights = weights.map { |w| w / weight_sum }
     
     if method == :hard
       # Majority vote
-      predictions = []
-      data.each do |row_preds|
-        # Count votes
+      ensemble_preds = []
+      n_samples.times do |i|
         votes = Hash.new(0)
-        row_preds.each { |p| votes[p] += 1 }
-        predictions << votes.max_by { |_, count| count }.first
+        predictions_array.each_with_index do |preds, model_idx|
+          vote = preds[i].round # Round to nearest integer for classification
+          votes[vote] += normalized_weights[model_idx]
+        end
+        ensemble_preds << votes.max_by { |_, count| count }.first
       end
     else
       # Weighted average (soft voting)
-      predictions = []
-      data.each do |row_preds|
-        weighted_sum = row_preds.zip(weights).map { |pred, w| pred * w }.sum
-        predictions << weighted_sum
+      ensemble_preds = []
+      n_samples.times do |i|
+        weighted_sum = predictions_array.each_with_index.map { |preds, idx| preds[i] * normalized_weights[idx] }.sum
+        ensemble_preds << weighted_sum
       end
     end
     
-    predictions
+    ensemble_preds
   end
 
   # Stacking ensemble (meta-learner)
@@ -178,21 +229,18 @@ class EnsembleOptimizer
   def weighted_ensemble(predictions_array, weights)
     logger.info "Creating weighted ensemble (#{predictions_array.first.size} predictions)"
     
-    predictions = []
+    n_samples = predictions_array.first.size
+    weight_sum = weights.sum
+    normalized_weights = weights.map { |w| w / weight_sum }
     
-    predictions_array[0].size.times do |i|
-      weighted_sum = 0
-      weight_sum = 0
-      
-      predictions_list.each_with_index do |preds, model_idx|
-        weight = weights[idx]
-        weighted_sum += predictions[i] * weight
-      end
-      
-      predictions << weighted_sum
+    ensemble_preds = []
+    
+    n_samples.times do |i|
+      weighted_sum = predictions_array.each_with_index.map { |preds, model_idx| preds[i] * normalized_weights[model_idx] }.sum
+      ensemble_preds << weighted_sum
     end
     
-    predictions
+    ensemble_preds
   end
 
   # Stacked generalization (meta-model)

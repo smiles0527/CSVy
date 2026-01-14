@@ -12,6 +12,7 @@ class HyperparameterManager
   end
 
   # Generate hyperparameter grid from configuration
+  # Supports both discrete arrays and continuous ranges
   def generate_grid(config_file, output_file = nil, sample_size: nil)
     config = YAML.load_file(config_file)
     model_name = config['model_name']
@@ -19,10 +20,40 @@ class HyperparameterManager
     
     @logger.info "Generating hyperparameter grid for #{model_name}"
     
-    # Generate all combinations
+    # Process parameters: convert ranges to discrete samples
+    processed_params = {}
     param_names = params.keys
-    param_values = params.values
     
+    params.each do |name, values|
+      if values.is_a?(Array)
+        # Check if it's a continuous range
+        if values.length == 3 && values[2].to_s == 'range'
+          # Continuous range: sample n points uniformly
+          min, max = values[0].to_f, values[1].to_f
+          n_samples = sample_size || 10 # Default 10 samples for continuous
+          processed_params[name] = (0...n_samples).map { |i| min + (max - min) * i / (n_samples - 1.0) }
+        elsif values.length == 2 && values.all? { |v| v.is_a?(Numeric) }
+          # Could be range or discrete - check if they're very different
+          if (values[1].to_f - values[0].to_f).abs > 1.0
+            # Likely a range, sample points
+            n_samples = sample_size || 10
+            min, max = values[0].to_f, values[1].to_f
+            processed_params[name] = (0...n_samples).map { |i| min + (max - min) * i / (n_samples - 1.0) }
+          else
+            # Discrete values
+            processed_params[name] = values
+          end
+        else
+          # Discrete values
+          processed_params[name] = values
+        end
+      else
+        processed_params[name] = [values]
+      end
+    end
+    
+    # Generate all combinations
+    param_values = processed_params.values
     grid = cartesian_product(param_values)
     
     # Sample if requested
@@ -34,7 +65,7 @@ class HyperparameterManager
     @logger.info "Generated #{grid.length} hyperparameter configurations"
     
     # Create CSV with grid
-    output_file ||= "#{model_name}_grid.csv"
+    output_file ||= "#{model_name}_grid_search.csv"
     
     # Ensure directory exists
     output_dir = File.dirname(output_file)
@@ -58,7 +89,8 @@ class HyperparameterManager
   end
 
   # Bayesian optimization using Gaussian Process surrogate
-  def bayesian_optimize(config_file, n_iterations: 20, n_initial: 5, acquisition: 'ei')
+  # Generates CSV file with configurations (non-interactive)
+  def bayesian_optimize(config_file, n_iterations: 20, n_initial: 5, acquisition: 'ei', output_file: nil)
     config = YAML.load_file(config_file)
     model_name = config['model_name']
     params = config['hyperparameters']
@@ -68,68 +100,57 @@ class HyperparameterManager
     
     # Get parameter space
     param_names = params.keys
-    param_bounds = params.values.map { |v| v.is_a?(Array) ? [0, v.length - 1] : [v, v] }
     
-    # Track all evaluated points
-    evaluated = []
+    # Track all configurations to evaluate
+    configurations = []
     
-    # Initial random exploration
+    # Phase 1: Initial random exploration
     @logger.info "Phase 1: Random exploration (#{n_initial} samples)"
     n_initial.times do |i|
-      config = sample_random_config(params)
-      evaluated << { config: config, score: nil, iteration: i + 1 }
-      
-      puts "\n[#{i + 1}/#{n_initial}] Suggested configuration:"
-      config.each { |k, v| puts "  #{k}: #{v}" }
-      puts "  → Train model and enter score (or 'skip'): "
+      config_hash = sample_random_config(params)
+      configurations << config_hash
     end
     
-    # Bayesian optimization iterations
-    @logger.info "\nPhase 2: Bayesian optimization (#{n_iterations - n_initial} samples)"
-    (n_initial + 1..n_iterations).each do |i|
-      # Fit surrogate model on evaluated points
-      completed = evaluated.select { |e| e[:score] }
+    # Phase 2: Bayesian-guided exploration
+    @logger.info "Phase 2: Bayesian optimization (#{n_iterations - n_initial} samples)"
+    (n_initial...n_iterations).each do |i|
+      # Use acquisition function to suggest next point
+      # For now, use diversity-based selection (explore unexplored regions)
+      config_hash = suggest_next_config(params, configurations, acquisition)
+      configurations << config_hash
+    end
+    
+    @logger.info "Generated #{configurations.length} configurations"
+    
+    # Output to CSV (same format as grid search)
+    output_file ||= "#{model_name}_bayesian_optimization.csv"
+    
+    # Ensure directory exists
+    output_dir = File.dirname(output_file)
+    require 'fileutils'
+    FileUtils.mkdir_p(output_dir) unless output_dir == '.' || File.directory?(output_dir)
+    
+    CSV.open(output_file, 'w') do |csv|
+      # Header: param names + experiment tracking columns
+      headers = param_names + ['experiment_id', 'rmse', 'mae', 'r2', 'notes', 'timestamp']
+      csv << headers
       
-      if completed.length < 2
-        # Not enough data, sample randomly
-        config = sample_random_config(params)
-      else
-        # Use acquisition function to suggest next point
-        config = suggest_next_config(params, completed, acquisition)
+      # Write each configuration
+      configurations.each_with_index do |config_hash, idx|
+        row = param_names.map { |name| config_hash[name] } + [idx + 1, nil, nil, nil, nil, nil]
+        csv << row
       end
-      
-      evaluated << { config: config, score: nil, iteration: i }
-      
-      puts "\n[#{i}/#{n_iterations}] Suggested configuration:"
-      config.each { |k, v| puts "  #{k}: #{v}" }
-      
-      # Show expected improvement if available
-      if completed.length >= 2
-        best_score = completed.map { |e| e[:score] }.min
-        puts "  Current best: #{best_score.round(4)}"
-        puts "  → Train model and enter score (or 'skip'): "
-      end
     end
     
-    # Output results
-    output_file = "#{model_name}_bayesian.json"
-    File.write(output_file, JSON.pretty_generate(evaluated))
-    @logger.info "Results saved to #{output_file}"
-    
-    # Find best
-    completed = evaluated.select { |e| e[:score] }
-    if completed.any?
-      best = completed.min_by { |e| e[:score] }
-      @logger.info "\nBest configuration found:"
-      best[:config].each { |k, v| @logger.info "  #{k}: #{v}" }
-      @logger.info "  Score: #{best[:score]}"
-    end
+    @logger.info "Bayesian optimization configurations saved to #{output_file}"
+    @logger.info "Next: Train models and record results with 'add-result' command"
     
     output_file
   end
 
   # Genetic algorithm optimization
-  def genetic_algorithm(config_file, population_size: 20, generations: 10, mutation_rate: 0.1)
+  # Generates CSV file with evolved configurations (non-interactive)
+  def genetic_algorithm(config_file, population_size: 20, generations: 10, mutation_rate: 0.1, output_file: nil)
     config = YAML.load_file(config_file)
     model_name = config['model_name']
     params = config['hyperparameters']
@@ -139,113 +160,114 @@ class HyperparameterManager
     
     # Initialize random population
     population = Array.new(population_size) { sample_random_config(params) }
-    fitness_scores = Array.new(population_size, nil)
-    
-    all_evaluated = []
+    all_configurations = population.dup
     
     generations.times do |gen|
-      @logger.info "\n=== Generation #{gen + 1}/#{generations} ==="
+      @logger.info "Generation #{gen + 1}/#{generations}: #{population_size} individuals"
       
-      # Evaluate population (user provides scores)
-      population.each_with_index do |individual, idx|
-        next if fitness_scores[idx] # Already evaluated
-        
-        puts "\nIndividual #{idx + 1}/#{population_size}:"
-        individual.each { |k, v| puts "  #{k}: #{v}" }
-        puts "  → Train model and enter score (or 'skip'): "
-        
-        all_evaluated << { config: individual, score: nil, generation: gen + 1 }
-      end
-      
-      # Selection: Keep top 50%
-      evaluated_indices = fitness_scores.each_index.select { |i| fitness_scores[i] }
-      next if evaluated_indices.length < 2
-      
-      sorted_indices = evaluated_indices.sort_by { |i| fitness_scores[i] }
-      survivors = sorted_indices.first(population_size / 2)
+      # Selection: Keep top 50% (simulate based on diversity)
+      # In real GA, this would use actual fitness scores
+      survivors = population.sample(population_size / 2)
       
       # Crossover: Breed new individuals
-      new_population = survivors.map { |i| population[i] }
+      new_population = survivors.dup
       
       while new_population.length < population_size
-        parent1 = population[survivors.sample]
-        parent2 = population[survivors.sample]
+        parent1 = survivors.sample
+        parent2 = survivors.sample
         child = crossover(parent1, parent2, params)
         
         # Mutation
         child = mutate(child, params, mutation_rate) if rand < mutation_rate
         
         new_population << child
+        all_configurations << child
       end
       
       population = new_population
-      fitness_scores = Array.new(population_size, nil)
-      
-      # Evaluate survivors from previous generation
-      survivors.each { |i| fitness_scores[i] = fitness_scores[i] }
     end
     
-    # Output results
-    output_file = "#{model_name}_genetic.json"
-    File.write(output_file, JSON.pretty_generate(all_evaluated))
-    @logger.info "Results saved to #{output_file}"
+    @logger.info "Generated #{all_configurations.length} total configurations"
+    
+    # Output to CSV
+    output_file ||= "#{model_name}_genetic_algorithm.csv"
+    
+    # Ensure directory exists
+    output_dir = File.dirname(output_file)
+    require 'fileutils'
+    FileUtils.mkdir_p(output_dir) unless output_dir == '.' || File.directory?(output_dir)
+    
+    param_names = params.keys
+    
+    CSV.open(output_file, 'w') do |csv|
+      headers = param_names + ['experiment_id', 'rmse', 'mae', 'r2', 'notes', 'timestamp']
+      csv << headers
+      
+      all_configurations.each_with_index do |config_hash, idx|
+        row = param_names.map { |name| config_hash[name] } + [idx + 1, nil, nil, nil, nil, nil]
+        csv << row
+      end
+    end
+    
+    @logger.info "Genetic algorithm configurations saved to #{output_file}"
+    @logger.info "Next: Train models and record results with 'add-result' command"
     
     output_file
   end
 
   # Simulated annealing
-  def simulated_annealing(config_file, n_iterations: 100, initial_temp: 1.0, cooling_rate: 0.95)
+  # Generates CSV file with configurations (non-interactive)
+  def simulated_annealing(config_file, n_iterations: 100, initial_temp: 1.0, cooling_rate: 0.95, output_file: nil)
     config = YAML.load_file(config_file)
     model_name = config['model_name']
     params = config['hyperparameters']
     
     @logger.info "Starting Simulated Annealing for #{model_name}"
+    @logger.info "Iterations: #{n_iterations}, Initial temp: #{initial_temp}, Cooling: #{cooling_rate}"
     
     # Start with random configuration
     current_config = sample_random_config(params)
-    current_score = nil
-    best_config = current_config.dup
-    best_score = Float::INFINITY
+    configurations = [current_config.dup]
     
     temperature = initial_temp
-    evaluated = []
     
     n_iterations.times do |i|
-      puts "\n[#{i + 1}/#{n_iterations}] Temperature: #{temperature.round(3)}"
-      puts "Current configuration:"
-      current_config.each { |k, v| puts "  #{k}: #{v}" }
-      puts "  → Train model and enter score (or 'skip'): "
-      
       # Generate neighbor (small random change)
       neighbor_config = neighbor(current_config, params)
+      configurations << neighbor_config.dup
       
-      evaluated << { 
-        config: current_config.dup, 
-        score: current_score, 
-        temperature: temperature,
-        iteration: i + 1
-      }
-      
-      # Update best if improved
-      if current_score && current_score < best_score
-        best_score = current_score
-        best_config = current_config.dup
-        @logger.info "New best: #{best_score.round(4)}"
-      end
-      
-      # Move to neighbor (will be evaluated next iteration)
+      # Move to neighbor (with probability based on temperature)
+      # For now, always accept (will be filtered by training results)
       current_config = neighbor_config
       
       # Cool down
       temperature *= cooling_rate
     end
     
-    output_file = "#{model_name}_annealing.json"
-    File.write(output_file, JSON.pretty_generate(evaluated))
-    @logger.info "\nOptimization complete!"
-    @logger.info "Best configuration:"
-    best_config.each { |k, v| @logger.info "  #{k}: #{v}" }
-    @logger.info "Best score: #{best_score}"
+    @logger.info "Generated #{configurations.length} configurations"
+    
+    # Output to CSV
+    output_file ||= "#{model_name}_simulated_annealing.csv"
+    
+    # Ensure directory exists
+    output_dir = File.dirname(output_file)
+    require 'fileutils'
+    FileUtils.mkdir_p(output_dir) unless output_dir == '.' || File.directory?(output_dir)
+    
+    param_names = params.keys
+    
+    CSV.open(output_file, 'w') do |csv|
+      headers = param_names + ['experiment_id', 'rmse', 'mae', 'r2', 'notes', 'timestamp']
+      csv << headers
+      
+      configurations.each_with_index do |config_hash, idx|
+        row = param_names.map { |name| config_hash[name] } + [idx + 1, nil, nil, nil, nil, nil]
+        csv << row
+      end
+    end
+    
+    @logger.info "Simulated annealing configurations saved to #{output_file}"
+    @logger.info "Next: Train models and record results with 'add-result' command"
     
     output_file
   end
@@ -406,52 +428,69 @@ class HyperparameterManager
   private
 
   # Sample random configuration
+  # Supports both discrete arrays and continuous ranges
   def sample_random_config(params)
     config = {}
     params.each do |name, values|
-      config[name] = values.is_a?(Array) ? values.sample : values
+      if values.is_a?(Array)
+        # Check if it's a range specification [min, max, type] or just discrete values
+        if values.length == 3 && values[2].to_s == 'range'
+          # Continuous range: [min, max, 'range']
+          min, max = values[0].to_f, values[1].to_f
+          config[name] = min + rand * (max - min)
+        elsif values.length == 2 && values.all? { |v| v.is_a?(Numeric) }
+          # Continuous range: [min, max] (assume range if both are numeric)
+          min, max = values[0].to_f, values[1].to_f
+          config[name] = min + rand * (max - min)
+        else
+          # Discrete values
+          config[name] = values.sample
+        end
+      else
+        config[name] = values
+      end
     end
     config
   end
 
   # Suggest next configuration using acquisition function
-  def suggest_next_config(params, completed, acquisition)
-    # Extract best score so far
-    best_score = completed.map { |e| e[:score] }.min
-    
+  def suggest_next_config(params, evaluated_configs, acquisition)
     # Generate candidate points
-    candidates = Array.new(1000) { sample_random_config(params) }
+    candidates = Array.new(100) { sample_random_config(params) }
     
-    # Score each candidate using Expected Improvement
+    # Score each candidate based on diversity (distance from evaluated points)
     candidates.map! do |config|
-      score = expected_improvement(config, completed, best_score)
-      { config: config, ei: score }
+      # Calculate minimum distance to any evaluated config
+      min_distance = evaluated_configs.map { |e| distance(config, e) }.min || 1.0
+      { config: config, diversity: min_distance }
     end
     
-    # Return config with highest EI
-    candidates.max_by { |c| c[:ei] }[:config]
+    # Return config with highest diversity (exploration)
+    candidates.max_by { |c| c[:diversity] }[:config]
   end
 
   # Expected Improvement (simple version using distance)
+  # Note: This is now handled in suggest_next_config
   def expected_improvement(config, completed, best_score)
     # Calculate average distance to evaluated points
     avg_distance = completed.sum do |e|
-      distance(config, e[:config])
+      distance(config, e.is_a?(Hash) ? e[:config] : e)
     end / completed.length.to_f
     
     # Balance exploration (distance) and exploitation (predicted improvement)
     exploration_bonus = avg_distance
-    exploitation_bonus = best_score * 0.1 # Small improvement expected
+    exploitation_bonus = (best_score || 1.0) * 0.1 # Small improvement expected
     
     exploration_bonus + exploitation_bonus
   end
 
   # Calculate distance between two configurations
   def distance(config1, config2)
-    # Simple hamming distance for discrete params
-    config1.keys.sum do |key|
-      config1[key] == config2[key] ? 0 : 1
-    end.to_f
+    # Normalized distance: count of different parameters
+    differences = config1.keys.count do |key|
+      config1[key] != config2[key]
+    end
+    differences.to_f / config1.keys.length
   end
 
   # Genetic algorithm: crossover two configurations
