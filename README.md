@@ -24,7 +24,7 @@
 - **Genetic Algorithm**: Evolution with crossover/mutation/selection
 - **Simulated Annealing**: Temperature-based exploration/exploitation
 
-### Ensemble Methods (Winning Strategy)
+### Ensemble Methods 
 - **Stacking**: Meta-learner trained on base model predictions
 - **Blending**: Holdout-based meta-model training
 - **Weighted Voting**: Optimized weights (inverse RMSE, softmax)
@@ -32,7 +32,7 @@
 - **Dynamic Weights**: Adaptive based on recent performance
 - **Diversity Analysis**: Checks error correlation (low = good ensemble)
 
-### Model Validation (Competition-Grade)
+### Model Validation 
 - **Time Series CV**: Expanding window (no data leakage)
 - **Stratified Splits**: Balanced train/test for classification
 - **Bootstrap CI**: 1000+ iterations for confidence intervals
@@ -40,7 +40,7 @@
 - **Calibration Analysis**: Binned predictions vs actuals
 - **Learning Curves**: Performance vs training size
 
-##  Quick Start (3 Commands to Win)
+##  Quick Start 
 
 ```bash
 # 1. Full competitive preprocessing pipeline
