@@ -1,0 +1,6 @@
+# Place hockey data files here
+# This folder is for data that will be used by notebooks
+
+# Expected files:
+# - hockey_data.csv (competition dataset)
+# - model3_elo_grid.csv (hyperparameter configs from Ruby)
