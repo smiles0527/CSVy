@@ -1,10 +1,28 @@
 # Python ELO Model - DeepNote Workflow
 
+## Folder Structure
+
+```
+python/
+├── models/           # Model definition notebooks
+│   └── elo_model.ipynb
+├── training/         # Training loop notebooks
+│   └── train_elo.ipynb
+├── validation/       # Validation test notebooks
+│   └── validate_elo.ipynb
+├── utils/            # Reusable Python modules
+│   ├── __init__.py
+│   └── elo_model.py  # EloModel class for importing
+├── data/             # Data files (gitignored except .gitkeep)
+├── README.md
+└── requirements.txt
+```
+
 ## Setup
 
 1. **Upload to DeepNote:**
-   - Drag and drop all `.ipynb` files into DeepNote
-   - Upload `requirements.txt`
+   - Upload entire `python/` folder to DeepNote
+   - Maintain folder structure for imports to work
 
 2. **Install dependencies:**
    ```bash
@@ -19,7 +37,7 @@
 
 ### Step 1: Generate Hyperparameters (Ruby - Local)
 ```bash
-# In your CSVy repo
+
 ruby cli.rb hyperparam-grid config/hyperparams/model3_elo.yaml -o output/hyperparams/model3_elo_grid.csv
 ```
 
@@ -27,15 +45,19 @@ ruby cli.rb hyperparam-grid config/hyperparams/model3_elo.yaml -o output/hyperpa
 
 **Open notebooks in order:**
 
-1. **`elo_model.ipynb`** - ELO implementation class
+1. **`models/elo_model.ipynb`** - ELO implementation class
    - Run all cells to define the `EloModel` class
    - No data needed, just the model code
 
-2. **`train_elo.ipynb`** - Hyperparameter grid search
+2. **`training/train_elo.ipynb`** - Hyperparameter grid search
    - Loads 648 configs from Ruby
    - Trains ELO for each config
    - Outputs: `model3_elo_results.csv`
    - **Estimated runtime:** 15-30 minutes for 648 configs
+
+3. **`validation/validate_elo.ipynb`** - Validation tests
+   - Run after training to validate model behavior
+   - All 4 tests should pass
 
 3. **Results:**
    - Best configuration saved
