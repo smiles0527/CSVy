@@ -107,10 +107,12 @@ class StackedEnsemble
     File.write(script_file.path, python_script)
     
     # Execute Python script
+    require 'open3'
     python_exe = ENV['PYTHON_PATH'] || 'python'
-    output = `#{python_exe} #{script_file.path} 2>&1`
+    stdout, stderr, status = Open3.capture3(python_exe, script_file.path)
+    output = stdout + stderr
     
-    unless $?.success?
+    unless status.success?
       logger.error "Meta-model training failed:"
       logger.error output
       raise "Meta-model training failed"
@@ -173,6 +175,29 @@ class StackedEnsemble
     
     # Write to temp CSV
     temp_pred = Tempfile.new(['stacked_pred', '.csv'])
+    
+    # Load base_model_names from pickle if not set
+    if @base_model_names.nil? || @base_model_names.empty?
+      require 'open3'
+      script = Tempfile.new(['load_names', '.py'])
+      script.write(<<~PYTHON)
+        import pickle
+        with open(#{@meta_model_path.to_json}, 'rb') as f:
+            meta = pickle.load(f)
+        print(','.join(meta['base_models']))
+      PYTHON
+      script.close
+      
+      python_exe = ENV['PYTHON_PATH'] || 'python'
+      stdout, stderr, status = Open3.capture3(python_exe, script.path)
+      if status.success?
+        @base_model_names = stdout.strip.split(',')
+      else
+        raise "Failed to load base_model_names: #{stderr}"
+      end
+      script.unlink
+    end
+    
     CSV.open(temp_pred.path, 'w') do |csv|
       csv << @base_model_names
       stacked_features.each { |features| csv << features }
@@ -189,10 +214,12 @@ class StackedEnsemble
     File.write(script_file.path, python_script)
     
     # Execute
+    require 'open3'
     python_exe = ENV['PYTHON_PATH'] || 'python'
-    output = `#{python_exe} #{script_file.path} 2>&1`
+    stdout, stderr, status = Open3.capture3(python_exe, script_file.path)
+    output = stdout + stderr
     
-    unless $?.success?
+    unless status.success?
       logger.error "Meta-model prediction failed:"
       logger.error output
       raise "Meta-model prediction failed"
@@ -226,8 +253,10 @@ class StackedEnsemble
     script_file = Tempfile.new(['analyze_weights', '.py'])
     File.write(script_file.path, python_script)
     
+    require 'open3'
     python_exe = ENV['PYTHON_PATH'] || 'python'
-    output = `#{python_exe} #{script_file.path} 2>&1`
+    stdout, stderr, status = Open3.capture3(python_exe, script_file.path)
+    output = stdout + stderr
     
     logger.info output
     
@@ -265,8 +294,6 @@ class StackedEnsemble
   end
   
   def create_linear_meta_script(train_csv, model_output, base_models_json)
-    penalty = @meta_model_type == 'ridge' ? 'l2' : 'l1'
-    
     <<~PYTHON
       import pandas as pd
       import numpy as np
@@ -425,15 +452,20 @@ class StackedEnsemble
       
       print(f"\\nMeta-model RMSE: {rmse:.3f}")
       
+      # Save Keras model separately, pickle the rest
+      model_file = #{model_output.to_json}.replace('.pkl', '_model.keras')
+      model.save(model_file)
+      
       with open(#{model_output.to_json}, 'wb') as f:
           pickle.dump({
-              'model': model,
+              'model_file': model_file,
               'scaler': scaler,
               'base_models': base_models,
               'type': 'neural_net'
           }, f)
       
       print(f"\\nMeta-model saved to {#{model_output.to_json}}")
+      print(f"Keras model saved to {model_file}")
     PYTHON
   end
   
@@ -447,9 +479,15 @@ class StackedEnsemble
       with open(#{model_path.to_json}, 'rb') as f:
           meta = pickle.load(f)
       
-      model = meta['model']
       base_models = meta['base_models']
       model_type = meta['type']
+      
+      # Load model based on type
+      if model_type == 'neural_net':
+          from tensorflow import keras
+          model = keras.models.load_model(meta['model_file'])
+      else:
+          model = meta['model']
       
       # Load predictions
       df = pd.read_csv(#{input_csv.to_json})
@@ -474,8 +512,6 @@ class StackedEnsemble
   end
   
   def create_weight_analysis_script(model_path, base_models)
-    base_models_json = base_models.to_json
-    
     <<~PYTHON
       import pickle
       import numpy as np
@@ -483,9 +519,15 @@ class StackedEnsemble
       with open(#{model_path.to_json}, 'rb') as f:
           meta = pickle.load(f)
       
-      model = meta['model']
       base_models = meta['base_models']
       model_type = meta['type']
+      
+      # Load model based on type
+      if model_type == 'neural_net':
+          from tensorflow import keras
+          model = keras.models.load_model(meta['model_file'])
+      else:
+          model = meta['model']
       
       print("=" * 60)
       print("META-MODEL ANALYSIS")

@@ -17,7 +17,7 @@ require_relative 'lib/model_validator'
 require_relative 'lib/ensemble_builder'
 require_relative 'lib/model_tracker'
 require_relative 'lib/neural_network_wrapper'
-require_relative 'lib/winning_features'
+require_relative 'lib/advanced_features'
 require_relative 'lib/stacked_ensemble'
 
 class CSVOrganizer < Thor
@@ -701,52 +701,52 @@ class CSVOrganizer < Thor
     hpm.compare_experiments(tracking_file, experiment_ids)
   end
 
-  # ===== COMPETITIVE EDGE COMMANDS =====
+  # ===== FEATURE ENGINEERING COMMANDS =====
   
-  desc "winning-features FILE", "Add TIER 1-3 game-winning features for hockey prediction"
+  desc "add-features FILE", "Add advanced features (Tier 1-3) for hockey prediction"
   option :output, aliases: :o, type: :string, desc: 'Output file'
   option :tier, type: :string, default: 'all', desc: 'Feature tier: 1, 2, 3, or all'
   option :team_col, type: :string, default: 'team_name', desc: 'Team column name'
   option :opponent_col, type: :string, default: 'opponent', desc: 'Opponent column name'
   option :date_col, type: :string, default: 'game_date', desc: 'Game date column'
   option :location_col, type: :string, default: 'location', desc: 'Location column (home/away)'
-  def winning_features(file)
+  def add_features(file)
     unless File.exist?(file)
       puts "✗ File not found: #{file}"
       exit 1
     end
     
-    puts "🏆 Adding WINNING features for hockey prediction..."
+    puts "Adding advanced features for hockey prediction..."
     puts "   Tier 1: Rest advantage, home ice, recent form (10-15% RMSE improvement)"
     puts "   Tier 2: Head-to-head, schedule strength, trends (5-8% improvement)"
     puts "   Tier 3: Playoff context, rivalries, travel (3-5% improvement)"
     puts
     
     data = CSV.read(file, headers: true).map(&:to_h)
-    wf = WinningFeatures.new
+    af = AdvancedFeatures.new
     
     original_count = data.first.keys.size
     
     case options[:tier]
     when '1'
-      data = wf.add_rest_advantage(data, date_col: options[:date_col], team_col: options[:team_col])
-      data = wf.add_home_away_edge(data, location_col: options[:location_col])
-      data = wf.add_recent_form(data, window: 5, team_col: options[:team_col])
+      data = af.add_rest_advantage(data, date_col: options[:date_col], team_col: options[:team_col])
+      data = af.add_home_away_edge(data, location_col: options[:location_col])
+      data = af.add_recent_form(data, window: 5, team_col: options[:team_col])
     when '2'
-      data = wf.add_head_to_head(data, team_col: options[:team_col], opponent_col: options[:opponent_col])
-      data = wf.add_strength_of_schedule(data, team_col: options[:team_col], opponent_col: options[:opponent_col])
-      data = wf.add_scoring_trends(data, team_col: options[:team_col])
+      data = af.add_head_to_head(data, team_col: options[:team_col], opponent_col: options[:opponent_col])
+      data = af.add_strength_of_schedule(data, team_col: options[:team_col], opponent_col: options[:opponent_col])
+      data = af.add_scoring_trends(data, team_col: options[:team_col])
     when '3'
-      data = wf.add_playoff_context(data)
-      data = wf.add_rivalry_indicator(data, team_col: options[:team_col], opponent_col: options[:opponent_col])
-      data = wf.add_travel_fatigue(data, team_col: options[:team_col], opponent_col: options[:opponent_col])
+      data = af.add_playoff_context(data)
+      data = af.add_rivalry_indicator(data, team_col: options[:team_col], opponent_col: options[:opponent_col])
+      data = af.add_travel_fatigue(data, team_col: options[:team_col], opponent_col: options[:opponent_col])
     else
       # Add all tiers
-      data = wf.add_all_winning_features(data)
+      data = af.add_all_features(data)
     end
     
     # Save output
-    output_file = options[:output] || file.gsub('.csv', '_winning.csv')
+    output_file = options[:output] || file.gsub('.csv', '_enhanced.csv')
     CSV.open(output_file, 'w') do |csv|
       csv << data.first.keys
       data.each { |row| csv << data.first.keys.map { |k| row[k] } }
@@ -755,13 +755,13 @@ class CSVOrganizer < Thor
     new_count = data.first.keys.size
     
     puts
-    puts "✓ Winning features saved to: #{output_file}"
+    puts "✓ Features saved to: #{output_file}"
     puts "  Original features: #{original_count}"
     puts "  New features: #{new_count}"
-    puts "  Added: #{new_count - original_count} winning features"
+    puts "  Added: #{new_count - original_count} features"
     puts
     puts "Expected RMSE improvement: 20-30% (1.9 → 1.4-1.5)"
-    puts "Next: Train ensemble with new features for competition win!"
+    puts "Next: Train ensemble with enhanced features!"
   end
   
   desc "advanced-features FILE", "Create advanced competition-winning features"
@@ -1364,17 +1364,13 @@ class CSVOrganizer < Thor
     
     # Check dependencies
     puts "Checking Python dependencies..."
-    deps = nn.check_dependencies
+    deps_ok = nn.check_dependencies
     
-    if deps[:all_installed]
+    if deps_ok
       puts "\u2713 All dependencies installed"
     else
-      puts "\u2717 Missing dependencies:"
-      deps[:missing].each do |pkg|
-        puts "  - #{pkg}"
-      end
-      puts "\nInstall with:"
-      puts "  pip install #{deps[:missing].join(' ')}"
+      puts "\u2717 Some dependencies missing"
+      puts "  Install with: pip install tensorflow scikit-learn pandas numpy pyyaml"
     end
     
     puts
@@ -1448,8 +1444,30 @@ class CSVOrganizer < Thor
     
     puts "==> Generating stacked ensemble predictions..."
     
+    # Load base model names from pickle
+    require 'tempfile'
+    require 'open3'
+    script = Tempfile.new(['load_base_models', '.py'])
+    script.write(<<~PYTHON)
+      import pickle
+      with open(#{model_path.to_json}, 'rb') as f:
+          meta = pickle.load(f)
+      print(','.join(meta['base_models']))
+    PYTHON
+    script.close
+    
+    python_exe = ENV['PYTHON_PATH'] || 'python'
+    stdout, stderr, status = Open3.capture3(python_exe, script.path)
+    unless status.success?
+      puts "Error loading base models: #{stderr}"
+      exit 1
+    end
+    base_models = stdout.strip.split(',')
+    script.unlink
+    
     stacker = StackedEnsemble.new(meta_model: options[:meta_model])
     stacker.instance_variable_set(:@meta_model_path, model_path)
+    stacker.instance_variable_set(:@base_model_names, base_models)
     
     output_file = stacker.predict_with_meta_model(predictions_dir, output_file: options[:output])
     
@@ -1483,11 +1501,16 @@ class CSVOrganizer < Thor
     script.close
     
     python_exe = ENV['PYTHON_PATH'] || 'python'
-    base_models = `#{python_exe} #{script.path}`.strip.split(',')
+    stdout, stderr, status = Open3.capture3(python_exe, script.path)
+    unless status.success?
+      puts "Error loading base models: #{stderr}"
+      exit 1
+    end
+    base_models = stdout.strip.split(',')
     
     stacker.instance_variable_set(:@base_model_names, base_models)
     
-    output = stacker.analyze_meta_model_weights
+    stacker.analyze_meta_model_weights
     
     puts
     puts "Interpretation:"
@@ -1498,7 +1521,7 @@ class CSVOrganizer < Thor
     script&.unlink
   end
   
-  desc "nn-status", "Check neural network model status and dependencies (DEPRECATED: use train-stacked-ensemble)"
+  desc "nn-status-old", "Check neural network model status and dependencies (DEPRECATED: use nn-status)"
   def nn_status_old
     puts "🧠 Neural Network Status\n\n"
     
