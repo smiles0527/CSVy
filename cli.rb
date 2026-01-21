@@ -18,6 +18,7 @@ require_relative 'lib/ensemble_builder'
 require_relative 'lib/model_tracker'
 require_relative 'lib/neural_network_wrapper'
 require_relative 'lib/stacked_ensemble'
+require_relative 'lib/model_explainer'
 
 class CSVOrganizer < Thor
   desc "report FILE", "Generate HTML report with tables (no fancy charts)"
@@ -1551,6 +1552,251 @@ class CSVOrganizer < Thor
     puts "  ruby cli.rb train-neural-network DATA_FILE --iterations 100"
     puts "  ruby cli.rb predict-neural-network DATA_FILE"
     puts "  ruby cli.rb ensemble-with-nn DATA_FILE --actuals ACTUALS_FILE"
+  end
+
+  desc "explain-model MODEL_PATH DATA_PATH", "Generate SHAP explainability report for trained model"
+  option :output, aliases: :o, type: :string, desc: 'Output directory (default: ./explanations/)'
+  option :model_type, aliases: :t, type: :string, default: 'xgboost', desc: 'Model type: xgboost, lightgbm, random_forest, linear'
+  option :top_n, type: :numeric, default: 20, desc: 'Number of top features to analyze'
+  def explain_model(model_path, data_path)
+    unless File.exist?(model_path)
+      puts "✗ Model file not found: #{model_path}"
+      exit 1
+    end
+    unless File.exist?(data_path)
+      puts "✗ Data file not found: #{data_path}"
+      exit 1
+    end
+
+    output_dir = options[:output] || File.join(Dir.pwd, 'explanations', File.basename(model_path, '.*'))
+    
+    puts "🔍 Generating SHAP explainability report..."
+    puts "  Model: #{model_path}"
+    puts "  Data: #{data_path}"
+    puts "  Type: #{options[:model_type]}"
+    puts ""
+
+    explainer = ModelExplainer.new
+    
+    begin
+      result = explainer.explain_predictions(
+        model_path: model_path,
+        data_path: data_path,
+        output_dir: output_dir,
+        model_type: options[:model_type],
+        top_n: options[:top_n]
+      )
+      
+      puts "\n✓ SHAP analysis complete!"
+      puts "\nGenerated files:"
+      puts "  📊 Summary plot: #{result[:summary_plot]}"
+      puts "  📈 Importance plot: #{result[:importance_plot]}"
+      puts "  📁 Dependence plots: #{result[:dependence_plots]}/"
+      puts "  💾 SHAP values CSV: #{result[:values_csv]}"
+      puts "  📄 HTML report: #{result[:report]}"
+      
+      puts "\nOpening HTML report in browser..."
+      if RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/
+        system("start #{result[:report]}")
+      elsif RbConfig::CONFIG['host_os'] =~ /darwin/
+        system("open #{result[:report]}")
+      elsif RbConfig::CONFIG['host_os'] =~ /linux|bsd/
+        system("xdg-open #{result[:report]}")
+      end
+    rescue => e
+      puts "\n✗ SHAP analysis failed: #{e.message}"
+      puts "\nMake sure you have installed Python dependencies:"
+      puts "  pip install shap pandas numpy matplotlib scikit-learn xgboost joblib"
+      exit 1
+    end
+  end
+
+  desc "explain-prediction MODEL_PATH", "Explain a single prediction in detail"
+  option :features, type: :hash, required: true, desc: 'Feature values as key=value pairs'
+  option :output, aliases: :o, type: :string, desc: 'Output JSON file path'
+  option :model_type, aliases: :t, type: :string, default: 'xgboost'
+  def explain_prediction(model_path)
+    unless File.exist?(model_path)
+      puts "✗ Model file not found: #{model_path}"
+      exit 1
+    end
+
+    output_path = options[:output] || 'single_prediction_explanation'
+    
+    puts "🔍 Explaining single prediction..."
+    puts "  Model: #{model_path}"
+    puts "  Features: #{options[:features].size} provided"
+    puts ""
+
+    explainer = ModelExplainer.new
+    
+    begin
+      result = explainer.explain_single_prediction(
+        model_path: model_path,
+        features: options[:features],
+        output_path: output_path,
+        model_type: options[:model_type]
+      )
+      
+      puts "✓ Prediction: #{result['prediction'].round(4)}"
+      puts "  Base value: #{result['base_value'].round(4)}" if result['base_value']
+      
+      puts "\n📈 Top Positive Contributors:"
+      result['top_positive'].each do |feature, contribution|
+        puts "  #{feature}: +#{contribution.round(4)}"
+      end
+      
+      puts "\n📉 Top Negative Contributors:"
+      result['top_negative'].each do |feature, contribution|
+        puts "  #{feature}: #{contribution.round(4)}"
+      end
+      
+      puts "\n💾 Full details saved to: #{output_path}.json"
+    rescue => e
+      puts "✗ Explanation failed: #{e.message}"
+      exit 1
+    end
+  end
+
+  desc "debug-errors PREDICTIONS ACTUALS FEATURES", "Analyze prediction errors and identify patterns"
+  option :output, aliases: :o, type: :string, desc: 'Output path (default: error_analysis.csv)'
+  def debug_errors(predictions_path, actuals_path, features_path)
+    [predictions_path, actuals_path, features_path].each do |path|
+      unless File.exist?(path)
+        puts "✗ File not found: #{path}"
+        exit 1
+      end
+    end
+
+    output_path = options[:output] || 'error_analysis.csv'
+    
+    puts "🐛 Analyzing prediction errors..."
+    puts "  Predictions: #{predictions_path}"
+    puts "  Actuals: #{actuals_path}"
+    puts "  Features: #{features_path}"
+    puts ""
+
+    explainer = ModelExplainer.new
+    
+    begin
+      analysis = explainer.analyze_errors(
+        predictions_path: predictions_path,
+        actuals_path: actuals_path,
+        features_path: features_path,
+        output_path: output_path
+      )
+      
+      puts "✓ Error Analysis Complete"
+      puts "\n📊 Overall Statistics:"
+      puts "  MAE: #{analysis[:overall][:mae].round(4)}"
+      puts "  RMSE: #{analysis[:overall][:rmse].round(4)}"
+      puts "  Mean Error: #{analysis[:overall][:mean_error].round(4)}"
+      puts "  Max Error: #{analysis[:overall][:max_error].round(4)}"
+      
+      puts "\n📈 Error Distribution:"
+      analysis[:by_magnitude].each do |bin|
+        puts "  #{bin[:name]}: #{bin[:count]} (#{bin[:percentage]}%)"
+      end
+      
+      puts "\n⚠️  Systematic Bias:"
+      bias = analysis[:systematic_bias]
+      puts "  Overall: #{bias[:overall_bias].round(4)}"
+      puts "  Overestimation: #{bias[:overestimation_rate]}%"
+      puts "  Underestimation: #{bias[:underestimation_rate]}%"
+      
+      if bias[:significant_bias]
+        puts "  ⚠️  Significant bias detected!"
+      end
+      
+      puts "\n💾 Full report: #{output_path.sub('.csv', '_report.html')}"
+    rescue => e
+      puts "✗ Error analysis failed: #{e.message}"
+      exit 1
+    end
+  end
+
+  desc "debug-features DATA_PATH", "Debug feature quality, detect outliers and anomalies"
+  option :output, aliases: :o, type: :string, desc: 'Output directory (default: ./feature_debug/)'
+  option :threshold, type: :numeric, default: 3.0, desc: 'Outlier detection threshold (sigmas)'
+  def debug_features(data_path)
+    unless File.exist?(data_path)
+      puts "✗ File not found: #{data_path}"
+      exit 1
+    end
+
+    output_dir = options[:output] || File.join(Dir.pwd, 'feature_debug')
+    
+    puts "🔧 Debugging feature quality..."
+    puts "  Data: #{data_path}"
+    puts "  Outlier threshold: #{options[:threshold]}σ"
+    puts ""
+
+    explainer = ModelExplainer.new
+    
+    begin
+      results = explainer.debug_features(
+        data_path: data_path,
+        output_dir: output_dir,
+        threshold: options[:threshold]
+      )
+      
+      puts "✓ Feature Debug Complete"
+      
+      if results[:missing_values].any?
+        puts "\n⚠️  Missing Values Detected:"
+        results[:missing_values].first(5).each do |mv|
+          puts "  #{mv[:feature]}: #{mv[:missing_count]} (#{mv[:missing_percentage]}%)"
+        end
+      else
+        puts "\n✓ No missing values detected"
+      end
+      
+      if results[:constant_features].any?
+        puts "\n⚠️  Constant Features (should remove):"
+        results[:constant_features].each do |cf|
+          puts "  - #{cf[:feature]}"
+        end
+      else
+        puts "\n✓ No constant features"
+      end
+      
+      if results[:outliers].any?
+        puts "\n⚠️  Outliers Detected:"
+        results[:outliers].first(5).each do |outlier|
+          puts "  #{outlier[:feature]}: #{outlier[:outlier_count]} (#{outlier[:outlier_percentage]}%)"
+        end
+      else
+        puts "\n✓ No extreme outliers detected"
+      end
+      
+      if results[:high_correlation].any?
+        puts "\n⚠️  High Correlations (|r| > 0.9):"
+        results[:high_correlation].first(5).each do |corr|
+          puts "  #{corr[:feature1]} ↔ #{corr[:feature2]}: #{corr[:correlation]}"
+        end
+      end
+      
+      puts "\n📊 Top Quality Features:"
+      results[:feature_quality_score].first(10).each do |fq|
+        puts "  #{fq[:feature]}: #{fq[:quality_score].round(1)}/100"
+      end
+      
+      report_path = File.join(output_dir, 'feature_debug_report.html')
+      puts "\n💾 Full report: #{report_path}"
+      
+      puts "\nOpening HTML report in browser..."
+      if RbConfig::CONFIG['host_os'] =~ /mswin|mingw|cygwin/
+        system("start #{report_path}")
+      elsif RbConfig::CONFIG['host_os'] =~ /darwin/
+        system("open #{report_path}")
+      elsif RbConfig::CONFIG['host_os'] =~ /linux|bsd/
+        system("xdg-open #{report_path}")
+      end
+    rescue => e
+      puts "✗ Feature debugging failed: #{e.message}"
+      puts e.backtrace.first(5)
+      exit 1
+    end
   end
 end
 
