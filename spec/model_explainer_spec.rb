@@ -158,8 +158,9 @@ RSpec.describe ModelExplainer do
       )
 
       bias = analysis[:systematic_bias]
-      expect(bias).to include(:overall_bias, :overestimation_rate, :underestimation_rate, :significant_bias)
-      expect(bias[:overestimation_rate] + bias[:underestimation_rate]).to eq(100.0)
+      expect(bias).to include(:overall_bias, :overestimation_rate, :underestimation_rate, :exact_predictions, :exact_rate, :significant_bias)
+      # Rates should sum to 100% (accounting for exact predictions)
+      expect(bias[:overestimation_rate] + bias[:underestimation_rate] + bias[:exact_rate]).to eq(100.0)
     end
 
     it 'identifies worst predictions' do

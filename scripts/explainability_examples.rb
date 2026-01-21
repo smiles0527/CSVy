@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 # Example: Complete explainability and debugging workflow
-
-require_relative '../lib/model_explainer'
+# This script demonstrates CLI usage - no code execution required
 
 # Example 1: Generate SHAP Report
 puts "=" * 60

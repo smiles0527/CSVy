@@ -456,10 +456,16 @@ class ModelExplainer
     # Check for bias patterns
     mean_error = errors.sum { |e| e[:error] } / errors.size
     
+    over_count = errors.count { |e| e[:error] > 0 }
+    under_count = errors.count { |e| e[:error] < 0 }
+    exact_count = errors.count { |e| e[:error] == 0 }
+    
     {
       overall_bias: mean_error,
-      overestimation_rate: (errors.count { |e| e[:error] > 0 }.to_f / errors.size * 100).round(2),
-      underestimation_rate: (errors.count { |e| e[:error] < 0 }.to_f / errors.size * 100).round(2),
+      overestimation_rate: (over_count.to_f / errors.size * 100).round(2),
+      underestimation_rate: (under_count.to_f / errors.size * 100).round(2),
+      exact_predictions: exact_count,
+      exact_rate: (exact_count.to_f / errors.size * 100).round(2),
       significant_bias: mean_error.abs > 0.1
     }
   end
@@ -603,11 +609,11 @@ class ModelExplainer
     q2_val = sorted[(n * 0.50).to_i]
     q3_val = sorted[(n * 0.75).to_i]
     
-    # Return 4 quartile ranges for proper iteration
+    # Return 4 quartile ranges with exclusive lower bounds to avoid overlaps
     [
-      { range: 0..q1_val, q1: q1_val },
-      { range: q1_val..q2_val, q2: q2_val },
-      { range: q2_val..q3_val, q3: q3_val },
+      { range: -Float::INFINITY..q1_val, q1: q1_val },
+      { range: q1_val...q2_val, q2: q2_val },  # exclusive lower bound
+      { range: q2_val...q3_val, q3: q3_val },  # exclusive lower bound
       { range: q3_val..Float::INFINITY, q3: q3_val }
     ]
   end
