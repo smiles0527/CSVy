@@ -28,7 +28,7 @@ class ModelExplainer
     File.write(script_path, python_script)
 
     @logger.info "Running SHAP analysis..."
-    result = system("python #{script_path}")
+    result = system('python', script_path)
 
     unless result
       raise "SHAP analysis failed. Check #{script_path} for errors."
@@ -126,7 +126,7 @@ class ModelExplainer
     script_path = "#{output_path}_script.py"
     File.write(script_path, python_script)
 
-    result = system("python #{script_path}")
+    result = system('python', script_path)
     unless result
       raise "Single prediction explanation failed"
     end
@@ -421,19 +421,14 @@ class ModelExplainer
     
     feature_columns.first(10).map do |feature|
       values = features.map { |row| row[feature].to_f }
-      quartiles = calculate_quartiles(values)
+      quartile_bins = calculate_quartiles(values)
       
       {
         feature: feature,
-        quartile_errors: quartiles.map.with_index do |q, idx|
+        quartile_errors: quartile_bins.map.with_index do |bin, idx|
           quartile_errors = errors.select { |e| 
             val = e[:features][feature].to_f
-            case idx
-            when 0 then val <= q[:q1]
-            when 1 then val > q[:q1] && val <= q[:q2]
-            when 2 then val > q[:q2] && val <= q[:q3]
-            else val > q[:q3]
-            end
+            bin[:range].cover?(val)
           }
           {
             quartile: idx + 1,
@@ -490,6 +485,9 @@ class ModelExplainer
       mean = values.sum / values.size
       std = standard_deviation(values)
       
+      # Skip if no variation (std == 0)
+      next nil if std.zero?
+      
       outliers = values.select { |v| ((v - mean).abs / std) > threshold }
       
       {
@@ -498,7 +496,7 @@ class ModelExplainer
         outlier_percentage: (outliers.size.to_f / values.size * 100).round(2),
         threshold_sigmas: threshold
       }
-    end.select { |result| result[:outlier_count] > 0 }
+    end.compact.select { |result| result[:outlier_count] > 0 }
   end
 
   def detect_constant_features(data)
@@ -601,11 +599,17 @@ class ModelExplainer
     sorted = values.sort
     n = sorted.size
     
-    [{
-      q1: sorted[(n * 0.25).to_i],
-      q2: sorted[(n * 0.50).to_i],
-      q3: sorted[(n * 0.75).to_i]
-    }]
+    q1_val = sorted[(n * 0.25).to_i]
+    q2_val = sorted[(n * 0.50).to_i]
+    q3_val = sorted[(n * 0.75).to_i]
+    
+    # Return 4 quartile ranges for proper iteration
+    [
+      { range: 0..q1_val, q1: q1_val },
+      { range: q1_val..q2_val, q2: q2_val },
+      { range: q2_val..q3_val, q3: q3_val },
+      { range: q3_val..Float::INFINITY, q3: q3_val }
+    ]
   end
 
   def save_error_analysis(analysis, output_path)

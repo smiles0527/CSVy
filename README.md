@@ -188,6 +188,7 @@ ruby cli.rb validate-model final_ensemble_preds.csv \
 | `clean` | Remove duplicates & handle missing | `ruby cli.rb clean data/nhl.csv -o data/clean.csv` |
 
 ### 🔍 NEW: Explainability & Debugging
+
 | Command | Purpose | Example |
 |---------|---------|---------|
 | `explain-model` | Generate SHAP explainability report | `ruby cli.rb explain-model models/xgb.pkl data/test.csv` |

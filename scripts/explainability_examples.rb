@@ -122,7 +122,7 @@ puts ""
 
 # Tips
 puts "=" * 60
-puts "w Tips & Best Practices"
+puts "💡 Tips & Best Practices"
 puts "=" * 60
 puts ""
 puts "1. Always debug features BEFORE training"

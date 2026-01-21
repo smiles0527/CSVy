@@ -210,12 +210,12 @@ RSpec.describe ModelExplainer do
       expect(corr).to be_within(0.01).of(1.0) # Perfect positive correlation
     end
 
-    it 'handles zero correlation' do
+    it 'handles negative correlation' do
       x = [1, 2, 3, 4, 5]
       y = [5, 4, 3, 2, 1]
       
       corr = explainer.send(:calculate_correlation, x, y)
-      expect(corr).to be < 0 # Negative correlation
+      expect(corr).to be < 0 # Negative correlation (r ≈ -1.0)
     end
   end
 

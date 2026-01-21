@@ -74,7 +74,7 @@ ruby cli.rb debug-errors predictions.csv actuals.csv features.csv -o my_error_re
 - Error patterns by feature ranges
 
 **Example output:**
-```
+```text
 ✓ Error Analysis Complete
 
 📊 Overall Statistics:
@@ -169,7 +169,7 @@ ruby cli.rb explain-prediction models/xgboost.pkl \
 ```
 
 **Output:**
-```
+```text
 ✓ Prediction: 0.7234
   Base value: 0.5000
 
@@ -262,7 +262,7 @@ ruby cli.rb explain-model models/linear.pkl data/test.csv -o exp/linear/
 
 ### Summary Plot (Beeswarm)
 
-```
+```text
               Low ← Feature Value → High
 Feature 1    ●●●●●●●●●●●●●●●●●●●●●●●●●
              Blue        Red
@@ -283,7 +283,7 @@ Feature 3    ●●●●●●●●●●●●●●●●●●●●●●�
 
 ### Importance Plot (Bar Chart)
 
-```
+```text
 Feature 1  ████████████████████ 0.45
 Feature 2  ███████████████ 0.32
 Feature 3  ██████████ 0.21
@@ -296,7 +296,7 @@ Feature 4  ████ 0.12
 
 ### Dependence Plot
 
-```
+```text
 SHAP value
     ↑
 0.3 |         ●●●
