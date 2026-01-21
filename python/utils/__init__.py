@@ -15,6 +15,14 @@ from .baseline_model import (
     PoissonBaseline,
     compare_baselines
 )
+from .linear_model import (
+    LinearRegressionModel,
+    LinearGoalPredictor,
+    grid_search_linear,
+    random_search_linear,
+    compare_regularization,
+    create_polynomial_features,
+)
 from .xgboost_model import (
     XGBoostModel,
     XGBoostGoalPredictor,
@@ -35,6 +43,14 @@ __all__ = [
     'WeightedHistoryBaseline',
     'PoissonBaseline',
     'compare_baselines',
+    
+    # Linear Regression Model (Model 3)
+    'LinearRegressionModel',
+    'LinearGoalPredictor',
+    'grid_search_linear',
+    'random_search_linear',
+    'compare_regularization',
+    'create_polynomial_features',
     
     # XGBoost Model (Model 4)
     'XGBoostModel',

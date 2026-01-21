@@ -40,13 +40,21 @@ Dynamic rating system that updates after each game.
 
 ## Model 3: Linear Regression
 
-*(Not yet implemented)*
+Linear regression with ElasticNet regularization (L1/L2), polynomial features, and feature scaling.
 
 | File | Purpose |
 |------|---------|
-| `utils/linear_model.py` | Core module |
-| `training/train_linear.ipynb` | Training notebook |
+| `models/linear_model.ipynb` | Core implementation notebook |
+| `utils/linear_model.py` | Reusable module with LinearRegressionModel class |
+| `training/train_linear.ipynb` | Training with hyperparameter tuning |
+| `tutorials/linear_tutorial.ipynb` | Tutorial explaining regularization |
 | `validation/validate_linear.ipynb` | Validation tests |
+
+**Classes:** `LinearRegressionModel`, `LinearGoalPredictor`
+
+**Key Hyperparameters:** `alpha` (regularization strength), `l1_ratio` (0=Ridge, 1=Lasso, 0.5=ElasticNet), `poly_degree`, `scaling`
+
+**Functions:** `grid_search_linear`, `random_search_linear`, `compare_regularization`
 
 ---
 
@@ -98,26 +106,33 @@ Gradient boosting and tree-based models for high accuracy.
 python/
 ├── models/                     # Core implementation notebooks
 │   ├── baseline_model.ipynb    # Model 1
-│   ├── elo_model.ipynb         # Model 2 (in notebooks/)
+│   ├── elo_model.ipynb         # Model 2
+│   ├── linear_model.ipynb      # Model 3
 │   └── xgboost_model.ipynb     # Model 4
 │
 ├── utils/                      # Reusable model modules
 │   ├── __init__.py
 │   ├── baseline_model.py       # Model 1
 │   ├── elo_model.py            # Model 2
-│   └── xgboost_model.py        # Model 4
+│   ├── linear_model.py         # Model 3
+│   ├── xgboost_model.py        # Model 4
+│   └── xgboost_model_v2.py     # Model 4 (production version)
 │
 ├── training/                   # Training notebooks
 │   ├── train_baseline.ipynb    # Model 1
 │   ├── train_elo.ipynb         # Model 2
+│   ├── train_linear.ipynb      # Model 3
 │   └── train_xgboost.ipynb     # Model 4
+│
+├── tutorials/                  # Tutorial notebooks
+│   ├── baseline_tutorial.ipynb # Model 1
+│   ├── elo_tutorial.ipynb      # Model 2
+│   └── linear_tutorial.ipynb   # Model 3
 │
 ├── validation/                 # Validation notebooks
 │   ├── validate_baseline.ipynb # Model 1
-│   └── validate_elo.ipynb      # Model 2
-│
-├── baseline_tutorial.ipynb     # Model 1 tutorial
-├── elo_tutorial.ipynb          # Model 2 tutorial
+│   ├── validate_elo.ipynb      # Model 2
+│   └── validate_linear.ipynb   # Model 3
 │
 └── MODEL_INDEX.md              # This file
 ```
@@ -130,7 +145,7 @@ python/
 |-------|--------|----------|------------|----------|--------|
 | 1. Baseline | ✅ | ✅ | ✅ | ✅ | **Complete** |
 | 2. ELO | ✅ | ✅ | ✅ | ✅ | **Complete** |
-| 3. Linear | ❌ | ❌ | ❌ | ❌ | Not Started |
+| 3. Linear | ✅ | ✅ | ✅ | ✅ | **Complete** |
 | 4. XGBoost | ✅ | ✅ | ❌ | ❌ | **In Progress** |
 | 5. Ensemble | ❌ | ❌ | ❌ | ❌ | Not Started |
 
