@@ -5,6 +5,8 @@ Performs grid search and random search for Neural Network model hyperparameters.
 Uses sklearn's MLPRegressor for simplicity (no PyTorch/TensorFlow dependency).
 Outputs results to: output/hyperparams/model6_neural_network_grid_search.csv
                     output/hyperparams/model6_neural_network_random_search.csv
+
+All runs are logged to MLflow for visualization at http://localhost:5000
 """
 
 import sys
@@ -19,6 +21,19 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import warnings
 warnings.filterwarnings('ignore')
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.experiment_tracker import ExperimentTracker
+
+# Initialize MLflow tracker - use absolute path with file:// URI
+mlruns_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mlruns")
+tracking_uri = f"file:///{mlruns_path.replace(os.sep, '/')}"
+tracker = ExperimentTracker(
+    experiment_name="neural_network_hyperparam_search",
+    tracking_uri=tracking_uri
+)
 
 # Handle scikit-learn version compatibility for RMSE
 try:
@@ -125,8 +140,8 @@ def build_hidden_layers(layer1, layer2, layer3=0):
     return tuple(layers)
 
 
-def evaluate_params(params, X_train, y_train, X_test, y_test):
-    """Evaluate a single parameter combination."""
+def evaluate_params(params, X_train, y_train, X_test, y_test, run_name=None):
+    """Evaluate a single parameter combination and log to MLflow."""
     # Get scaler
     scaler_type = params.pop('scaler', 'standard')
     scaler = get_scaler(scaler_type)
@@ -155,12 +170,26 @@ def evaluate_params(params, X_train, y_train, X_test, y_test):
     model.fit(X_train_scaled, y_train)
     predictions = model.predict(X_test_scaled)
     
-    return {
+    metrics = {
         'rmse': rmse_score(y_test, predictions),
         'mae': mean_absolute_error(y_test, predictions),
         'r2': r2_score(y_test, predictions),
         'n_iter': model.n_iter_,
     }
+    
+    # Log to MLflow
+    with tracker.start_run(run_name=run_name or f"nn_{datetime.now().strftime('%H%M%S')}"):
+        tracker.log_params({
+            'scaler': scaler_type,
+            'hidden_layers': str(hidden_layers),
+            'layer1_units': layer1,
+            'layer2_units': layer2,
+            'layer3_units': layer3,
+            **params
+        })
+        tracker.log_metrics(metrics)
+    
+    return metrics
 
 
 def grid_search_nn(X_train, y_train, X_test, y_test, param_grid, verbose=True):

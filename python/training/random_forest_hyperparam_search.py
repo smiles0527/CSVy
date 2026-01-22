@@ -4,6 +4,8 @@ Random Forest Model Hyperparameter Search
 Performs grid search and random search for Random Forest model hyperparameters.
 Outputs results to: output/hyperparams/model4_random_forest_grid_search.csv
                     output/hyperparams/model4_random_forest_random_search.csv
+
+All runs are logged to MLflow for visualization at http://localhost:5000
 """
 
 import sys
@@ -15,6 +17,19 @@ import numpy as np
 from datetime import datetime
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.experiment_tracker import ExperimentTracker
+
+# Initialize MLflow tracker - use absolute path with file:// URI
+mlruns_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mlruns")
+tracking_uri = f"file:///{mlruns_path.replace(os.sep, '/')}"
+tracker = ExperimentTracker(
+    experiment_name="random_forest_hyperparam_search",
+    tracking_uri=tracking_uri
+)
 
 # Handle scikit-learn version compatibility for RMSE
 try:
@@ -99,17 +114,24 @@ def prepare_features_target(df, target_col='home_goals'):
     return X, y
 
 
-def evaluate_params(params, X_train, y_train, X_test, y_test):
-    """Evaluate a single parameter combination."""
+def evaluate_params(params, X_train, y_train, X_test, y_test, run_name=None):
+    """Evaluate a single parameter combination and log to MLflow."""
     model = RandomForestRegressor(random_state=42, n_jobs=-1, **params)
     model.fit(X_train, y_train)
     predictions = model.predict(X_test)
     
-    return {
+    metrics = {
         'rmse': rmse_score(y_test, predictions),
         'mae': mean_absolute_error(y_test, predictions),
         'r2': r2_score(y_test, predictions),
     }
+    
+    # Log to MLflow
+    with tracker.start_run(run_name=run_name or f"rf_{datetime.now().strftime('%H%M%S')}"):
+        tracker.log_params(params)
+        tracker.log_metrics(metrics)
+    
+    return metrics
 
 
 def grid_search_rf(X_train, y_train, X_test, y_test, param_grid, verbose=True):

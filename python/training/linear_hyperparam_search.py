@@ -4,6 +4,8 @@ Linear Regression Model Hyperparameter Search
 Performs grid search and random search for linear model hyperparameters.
 Outputs results to: output/hyperparams/model2_linear_grid_search.csv
                     output/hyperparams/model2_linear_random_search.csv
+
+All runs are logged to MLflow for visualization at http://localhost:5000
 """
 
 import sys
@@ -21,6 +23,15 @@ from sklearn.linear_model import Ridge, Lasso, ElasticNet
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from utils.experiment_tracker import ExperimentTracker
+
+# Initialize MLflow tracker - use absolute path with file:// URI
+mlruns_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mlruns")
+tracking_uri = f"file:///{mlruns_path.replace(os.sep, '/')}"
+tracker = ExperimentTracker(
+    experiment_name="linear_hyperparam_search",
+    tracking_uri=tracking_uri
+)
 
 
 def generate_sample_data(n_games=500, n_teams=10):
@@ -86,8 +97,8 @@ def prepare_features_target(df, target_col='home_goals'):
     return X, y
 
 
-def evaluate_linear_model(model_type, params, X_train, y_train, X_test, y_test, scaler):
-    """Evaluate a linear model with given parameters."""
+def evaluate_linear_model(model_type, params, X_train, y_train, X_test, y_test, scaler, run_name=None):
+    """Evaluate a linear model with given parameters and log to MLflow."""
     # Scale features
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
@@ -107,11 +118,18 @@ def evaluate_linear_model(model_type, params, X_train, y_train, X_test, y_test, 
     predictions = model.predict(X_test_scaled)
     
     # Calculate metrics
-    return {
+    metrics = {
         'rmse': np.sqrt(mean_squared_error(y_test, predictions)),
         'mae': mean_absolute_error(y_test, predictions),
         'r2': r2_score(y_test, predictions),
     }
+    
+    # Log to MLflow
+    with tracker.start_run(run_name=run_name or f"{model_type}_{datetime.now().strftime('%H%M%S')}"):
+        tracker.log_params({'model_type': model_type, **params})
+        tracker.log_metrics(metrics)
+    
+    return metrics
 
 
 def grid_search_linear(X_train, y_train, X_test, y_test, param_grid, model_type='ridge', verbose=True):
@@ -133,7 +151,8 @@ def grid_search_linear(X_train, y_train, X_test, y_test, param_grid, model_type=
         params = dict(zip(keys, values))
         
         try:
-            metrics = evaluate_linear_model(model_type, params, X_train, y_train, X_test, y_test, scaler)
+            metrics = evaluate_linear_model(model_type, params, X_train, y_train, X_test, y_test, scaler,
+                                            run_name=f"{model_type}_grid_{i+1}")
             result = {'model_type': model_type, **params, **metrics}
             results.append(result)
             

@@ -1,0 +1,6 @@
+{
+  "model_name": "Linear",
+  "test_r2": 0.13476305297626323,
+  "trained_at": "2026-01-21T14:44:03.541679",
+  "model_file": "C:\\Users\\iscur\\code\\smiles\\CSVy\\python\\models\\production_model.pkl"
+}

@@ -1,0 +1,50 @@
+{
+  "Linear": {
+    "parameters": {
+      "alpha": "1.7277391635930137",
+      "l1_ratio": "0.4034267133820356",
+      "max_iter": "10000",
+      "model_type": "elastic"
+    },
+    "metrics": {
+      "r2": -0.00023367012730179937,
+      "mae": 1.4392500000000001,
+      "rmse": 1.7992098960377023
+    },
+    "run_id": "d96a07a477594a17a80aa4857908ce7d"
+  },
+  "Elo": {
+    "parameters": {
+      "home_advantage": "179",
+      "mov_method": "logarithmic",
+      "b2b_penalty": "53",
+      "initial_rating": "1500",
+      "mov_multiplier": "1.3255413752063883",
+      "rest_advantage_per_day": "0",
+      "season_carryover": "0.7250694370753683",
+      "k_factor": "24",
+      "ot_win_multiplier": "0.9182028112330721"
+    },
+    "metrics": {
+      "r2": -0.732923161204136,
+      "mae": 1.8847809740374089,
+      "rmse": 2.265247876474407
+    },
+    "run_id": "def64309c9dd47fa8c42ed82e0c5be40"
+  },
+  "RandomForest": {
+    "parameters": {
+      "min_samples_leaf": "1",
+      "max_depth": "None",
+      "n_estimators": "316",
+      "max_features": "0.3",
+      "min_samples_split": "15"
+    },
+    "metrics": {
+      "r2": -0.028449457572426562,
+      "mae": 1.4286174598484318,
+      "rmse": 1.7696357657107673
+    },
+    "run_id": "be93813252c04c1d88f0a7e25c4cdad0"
+  }
+}

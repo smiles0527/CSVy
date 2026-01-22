@@ -4,6 +4,8 @@ Elo Model Hyperparameter Search
 Performs grid search and random search for Elo model hyperparameters.
 Outputs results to: output/hyperparams/model3_elo_grid_search.csv
                     output/hyperparams/model3_elo_random_search.csv
+
+All runs are logged to MLflow for visualization at http://localhost:5000
 """
 
 import sys
@@ -18,6 +20,15 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.elo_model import EloModel
+from utils.experiment_tracker import ExperimentTracker
+
+# Initialize MLflow tracker - use absolute path with file:// URI
+mlruns_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mlruns")
+tracking_uri = f"file:///{mlruns_path.replace(os.sep, '/')}"
+tracker = ExperimentTracker(
+    experiment_name="elo_hyperparam_search",
+    tracking_uri=tracking_uri
+)
 
 
 def generate_sample_data(n_games=500, n_teams=10):
@@ -49,11 +60,17 @@ def generate_sample_data(n_games=500, n_teams=10):
     return pd.DataFrame(games)
 
 
-def evaluate_params(params, train_df, test_df):
-    """Evaluate a single parameter combination."""
+def evaluate_params(params, train_df, test_df, run_name=None):
+    """Evaluate a single parameter combination and log to MLflow."""
     model = EloModel(params)
     model.fit(train_df)
     metrics = model.evaluate(test_df)
+    
+    # Log to MLflow
+    with tracker.start_run(run_name=run_name or f"elo_{datetime.now().strftime('%H%M%S')}"):
+        tracker.log_params(params)
+        tracker.log_metrics(metrics)
+    
     return metrics
 
 

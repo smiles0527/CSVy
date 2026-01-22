@@ -4,6 +4,8 @@ Ensemble Model Hyperparameter Search
 Performs grid search and random search for ensemble model configurations.
 Outputs results to: output/hyperparams/model5_ensemble_grid_search.csv
                     output/hyperparams/model5_ensemble_random_search.csv
+
+All runs are logged to MLflow for visualization at http://localhost:5000
 """
 
 import sys
@@ -23,6 +25,15 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.base import clone
+from utils.experiment_tracker import ExperimentTracker
+
+# Initialize MLflow tracker - use absolute path with file:// URI
+mlruns_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mlruns")
+tracking_uri = f"file:///{mlruns_path.replace(os.sep, '/')}"
+tracker = ExperimentTracker(
+    experiment_name="ensemble_hyperparam_search",
+    tracking_uri=tracking_uri
+)
 
 
 def generate_sample_data(n_games=500, n_teams=10):
@@ -118,8 +129,8 @@ def create_weighted_ensemble(models, weights=None):
     return WeightedEnsemble(models, weights)
 
 
-def evaluate_ensemble(model_names, weights, X_train, y_train, X_test, y_test):
-    """Evaluate an ensemble configuration."""
+def evaluate_ensemble(model_names, weights, X_train, y_train, X_test, y_test, run_name=None):
+    """Evaluate an ensemble configuration and log to MLflow."""
     # Create and fit models
     models = []
     for name in model_names:
@@ -131,15 +142,25 @@ def evaluate_ensemble(model_names, weights, X_train, y_train, X_test, y_test):
     ensemble = create_weighted_ensemble(models, weights)
     predictions = ensemble.predict(X_test)
     
-    return {
+    metrics = {
         'rmse': np.sqrt(mean_squared_error(y_test, predictions)),
         'mae': mean_absolute_error(y_test, predictions),
         'r2': r2_score(y_test, predictions),
     }
+    
+    # Log to MLflow
+    with tracker.start_run(run_name=run_name or f"ensemble_{datetime.now().strftime('%H%M%S')}"):
+        tracker.log_params({
+            'models': '+'.join(model_names),
+            'weights': ','.join([f"{w:.2f}" for w in weights]) if weights else 'equal'
+        })
+        tracker.log_metrics(metrics)
+    
+    return metrics
 
 
-def evaluate_stacking(estimators, meta_model, X_train, y_train, X_test, y_test, passthrough=False):
-    """Evaluate a stacking ensemble."""
+def evaluate_stacking(estimators, meta_model, X_train, y_train, X_test, y_test, passthrough=False, run_name=None):
+    """Evaluate a stacking ensemble and log to MLflow."""
     stacking = StackingRegressor(
         estimators=estimators,
         final_estimator=clone(meta_model),
@@ -151,11 +172,22 @@ def evaluate_stacking(estimators, meta_model, X_train, y_train, X_test, y_test, 
     stacking.fit(X_train, y_train)
     predictions = stacking.predict(X_test)
     
-    return {
+    metrics = {
         'rmse': np.sqrt(mean_squared_error(y_test, predictions)),
         'mae': mean_absolute_error(y_test, predictions),
         'r2': r2_score(y_test, predictions),
     }
+    
+    # Log to MLflow
+    with tracker.start_run(run_name=run_name or f"stacking_{datetime.now().strftime('%H%M%S')}"):
+        tracker.log_params({
+            'estimators': '+'.join([name for name, _ in estimators]),
+            'meta_model': type(meta_model).__name__,
+            'passthrough': passthrough
+        })
+        tracker.log_metrics(metrics)
+    
+    return metrics
 
 
 def grid_search_weighted_ensemble(X_train, y_train, X_test, y_test, verbose=True):

@@ -4,6 +4,8 @@ XGBoost Model Hyperparameter Search
 Performs grid search and random search for XGBoost model hyperparameters.
 Outputs results to: output/hyperparams/model4_xgboost_grid_search.csv
                     output/hyperparams/model4_xgboost_random_search.csv
+
+All runs are logged to MLflow for visualization at http://localhost:5000
 """
 
 import sys
@@ -18,6 +20,15 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.xgboost_model import XGBoostModel
+from utils.experiment_tracker import ExperimentTracker
+
+# Initialize MLflow tracker - use absolute path with file:// URI
+mlruns_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mlruns")
+tracking_uri = f"file:///{mlruns_path.replace(os.sep, '/')}"
+tracker = ExperimentTracker(
+    experiment_name="xgboost_hyperparam_search",
+    tracking_uri=tracking_uri
+)
 
 
 def generate_sample_data(n_games=500, n_teams=10):
@@ -93,11 +104,17 @@ def prepare_features_target(df, target_col='home_goals'):
     return X, y
 
 
-def evaluate_params(params, X_train, y_train, X_test, y_test):
-    """Evaluate a single parameter combination."""
+def evaluate_params(params, X_train, y_train, X_test, y_test, run_name=None):
+    """Evaluate a single parameter combination and log to MLflow."""
     model = XGBoostModel(params)
     model.fit(X_train, y_train)
     metrics = model.evaluate(X_test, y_test)
+    
+    # Log to MLflow
+    with tracker.start_run(run_name=run_name or f"xgb_{datetime.now().strftime('%H%M%S')}"):
+        tracker.log_params(params)
+        tracker.log_metrics(metrics)
+    
     return metrics
 
 
@@ -119,7 +136,8 @@ def grid_search_xgboost(X_train, y_train, X_test, y_test, param_grid, verbose=Tr
         params = dict(zip(keys, values))
         
         try:
-            metrics = evaluate_params(params, X_train, y_train, X_test, y_test)
+            metrics = evaluate_params(params, X_train, y_train, X_test, y_test, 
+                                       run_name=f"grid_{i+1}")
             result = {**params, **metrics}
             results.append(result)
             
@@ -166,7 +184,8 @@ def random_search_xgboost(X_train, y_train, X_test, y_test, param_distributions,
                     params[key] = np.random.uniform(dist[0], dist[1])
         
         try:
-            metrics = evaluate_params(params, X_train, y_train, X_test, y_test)
+            metrics = evaluate_params(params, X_train, y_train, X_test, y_test,
+                                       run_name=f"random_{i+1}")
             result = {**params, **metrics}
             results.append(result)
             
