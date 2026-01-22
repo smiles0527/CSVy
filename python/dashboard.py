@@ -696,6 +696,328 @@ class HockeyDashboard:
             else:
                 st.success("Your pipeline looks competition-ready!")
     
+    def load_hyperparam_csvs(self):
+        """Load hyperparameter search results from CSV files."""
+        hyperparam_path = Path("../output/hyperparams")
+        if not hyperparam_path.exists():
+            hyperparam_path = Path("output/hyperparams")
+        
+        all_data = {}
+        if hyperparam_path.exists():
+            for csv_file in hyperparam_path.glob("*.csv"):
+                try:
+                    df = pd.read_csv(csv_file)
+                    # Only include if it has some results (non-empty metrics)
+                    if not df.empty:
+                        model_name = csv_file.stem.replace("_grid_search", "").replace("_random_search", "")
+                        search_type = "grid" if "grid" in csv_file.stem else "random"
+                        key = f"{model_name} ({search_type})"
+                        all_data[key] = df
+                except Exception as e:
+                    pass
+        return all_data
+    
+    def render_hyperparam_graphs(self):
+        """Render hyperparameter visualization with error metrics."""
+        st.subheader("📊 Hyperparameter Search Results")
+        
+        hyperparam_data = self.load_hyperparam_csvs()
+        
+        if not hyperparam_data:
+            st.warning("No hyperparameter CSV files found in output/hyperparams/")
+            st.info("""
+            **Expected file location:** `output/hyperparams/*.csv`
+            
+            Run hyperparameter searches to generate these files:
+            ```
+            python training/linear_hyperparam_search.py
+            python training/xgboost_hyperparam_search.py
+            ```
+            """)
+            return
+        
+        # Model selector
+        selected_model = st.selectbox(
+            "Select Model/Search", 
+            list(hyperparam_data.keys()),
+            key="hyperparam_model_select"
+        )
+        
+        df = hyperparam_data[selected_model]
+        
+        # Show data summary
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Configurations", len(df))
+        with col2:
+            has_results = df['r2'].notna().sum() if 'r2' in df.columns else 0
+            st.metric("Completed Runs", has_results)
+        with col3:
+            if 'r2' in df.columns and df['r2'].notna().any():
+                best_r2 = df['r2'].max()
+                st.metric("Best R²", f"{best_r2:.4f}")
+            else:
+                st.metric("Best R²", "N/A")
+        
+        # Identify numeric hyperparameters and metrics
+        metric_cols = ['rmse', 'mae', 'r2', 'mse', 'mape']
+        available_metrics = [col for col in metric_cols if col in df.columns and df[col].notna().any()]
+        
+        # Exclude metrics and metadata to get hyperparameter columns
+        exclude_cols = metric_cols + ['experiment_id', 'notes', 'timestamp', 'run_id']
+        hyperparam_cols = [col for col in df.columns if col not in exclude_cols]
+        
+        if not available_metrics:
+            st.warning("No completed experiments with metrics found. The CSV has configurations but no results yet.")
+            
+            # Still show the configuration distribution
+            st.markdown("### Configuration Distribution")
+            numeric_params = []
+            for col in hyperparam_cols:
+                try:
+                    if pd.to_numeric(df[col], errors='coerce').notna().any():
+                        numeric_params.append(col)
+                except:
+                    pass
+            
+            if numeric_params:
+                param_to_show = st.selectbox("Select parameter to visualize", numeric_params)
+                fig = px.histogram(df, x=param_to_show, title=f"Distribution of {param_to_show}")
+                fig.update_layout(template="plotly_dark", height=400)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Show raw data preview
+            with st.expander("View Raw Configuration Data"):
+                st.dataframe(df.head(50), use_container_width=True)
+            return
+        
+        # Create tabs for different visualizations
+        viz_tab1, viz_tab2, viz_tab3, viz_tab4 = st.tabs([
+            "📈 Error by Hyperparameter",
+            "🔥 Heatmaps", 
+            "📉 Error Distribution",
+            "🏆 Top Configurations"
+        ])
+        
+        with viz_tab1:
+            st.markdown("### Error Metrics vs Hyperparameters")
+            
+            # Get numeric hyperparameters
+            numeric_params = []
+            for col in hyperparam_cols:
+                try:
+                    numeric_vals = pd.to_numeric(df[col], errors='coerce')
+                    if numeric_vals.notna().sum() > 1 and numeric_vals.nunique() > 1:
+                        numeric_params.append(col)
+                except:
+                    pass
+            
+            # Get categorical hyperparameters
+            categorical_params = [col for col in hyperparam_cols 
+                                  if col not in numeric_params 
+                                  and df[col].nunique() > 1 
+                                  and df[col].nunique() <= 20]
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_metric = st.selectbox("Select Error Metric", available_metrics, key="error_metric")
+            with col2:
+                all_params = numeric_params + categorical_params
+                if all_params:
+                    selected_param = st.selectbox("Select Hyperparameter", all_params, key="hyperparam")
+                else:
+                    st.warning("No suitable hyperparameters found")
+                    selected_param = None
+            
+            if selected_param and selected_metric:
+                # Filter rows with valid metric values
+                plot_df = df[df[selected_metric].notna()].copy()
+                
+                if len(plot_df) > 0:
+                    if selected_param in numeric_params:
+                        # Scatter plot for numeric params
+                        fig = px.scatter(
+                            plot_df,
+                            x=selected_param,
+                            y=selected_metric,
+                            color=selected_metric,
+                            color_continuous_scale='RdYlGn_r' if selected_metric in ['rmse', 'mae', 'mse', 'mape'] else 'RdYlGn',
+                            title=f"{selected_metric.upper()} vs {selected_param}",
+                            trendline="lowess" if len(plot_df) > 10 else None
+                        )
+                        fig.update_layout(template="plotly_dark", height=500)
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Also show aggregated box plot
+                        if plot_df[selected_param].nunique() <= 20:
+                            fig2 = px.box(
+                                plot_df,
+                                x=selected_param,
+                                y=selected_metric,
+                                title=f"{selected_metric.upper()} Distribution by {selected_param}"
+                            )
+                            fig2.update_layout(template="plotly_dark", height=400)
+                            st.plotly_chart(fig2, use_container_width=True)
+                    else:
+                        # Box plot for categorical params
+                        fig = px.box(
+                            plot_df,
+                            x=selected_param,
+                            y=selected_metric,
+                            color=selected_param,
+                            title=f"{selected_metric.upper()} by {selected_param}"
+                        )
+                        fig.update_layout(template="plotly_dark", height=500)
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Bar chart of means
+                        agg_df = plot_df.groupby(selected_param)[selected_metric].agg(['mean', 'std', 'count']).reset_index()
+                        fig2 = px.bar(
+                            agg_df,
+                            x=selected_param,
+                            y='mean',
+                            error_y='std',
+                            title=f"Mean {selected_metric.upper()} by {selected_param}",
+                            text='count'
+                        )
+                        fig2.update_traces(texttemplate='n=%{text}', textposition='outside')
+                        fig2.update_layout(template="plotly_dark", height=400)
+                        st.plotly_chart(fig2, use_container_width=True)
+                else:
+                    st.info("No data points with valid metric values")
+        
+        with viz_tab2:
+            st.markdown("### Hyperparameter Interaction Heatmaps")
+            
+            if len(numeric_params) >= 2 and available_metrics:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    x_param = st.selectbox("X-axis Parameter", numeric_params, key="heatmap_x")
+                with col2:
+                    y_options = [p for p in numeric_params if p != x_param]
+                    y_param = st.selectbox("Y-axis Parameter", y_options, key="heatmap_y") if y_options else None
+                with col3:
+                    heat_metric = st.selectbox("Metric", available_metrics, key="heatmap_metric")
+                
+                if x_param and y_param and heat_metric:
+                    plot_df = df[df[heat_metric].notna()].copy()
+                    
+                    if len(plot_df) > 0:
+                        # Create pivot table for heatmap
+                        try:
+                            pivot = plot_df.pivot_table(
+                                values=heat_metric,
+                                index=y_param,
+                                columns=x_param,
+                                aggfunc='mean'
+                            )
+                            
+                            fig = px.imshow(
+                                pivot,
+                                labels=dict(x=x_param, y=y_param, color=heat_metric),
+                                color_continuous_scale='RdYlGn_r' if heat_metric in ['rmse', 'mae', 'mse', 'mape'] else 'RdYlGn',
+                                aspect="auto",
+                                title=f"{heat_metric.upper()} Heatmap: {x_param} vs {y_param}"
+                            )
+                            fig.update_layout(template="plotly_dark", height=500)
+                            st.plotly_chart(fig, use_container_width=True)
+                        except Exception as e:
+                            st.warning(f"Could not create heatmap: {e}")
+            elif len(categorical_params) >= 1 and len(numeric_params) >= 1:
+                st.info("Select a categorical and numeric parameter for the heatmap")
+            else:
+                st.info("Need at least 2 numeric hyperparameters for heatmap visualization")
+        
+        with viz_tab3:
+            st.markdown("### Error Distribution Analysis")
+            
+            for metric in available_metrics:
+                metric_data = df[metric].dropna()
+                if len(metric_data) > 0:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        fig = px.histogram(
+                            metric_data,
+                            nbins=30,
+                            title=f"{metric.upper()} Distribution",
+                            labels={'value': metric.upper(), 'count': 'Count'}
+                        )
+                        fig.add_vline(x=metric_data.mean(), line_dash="dash", line_color="yellow",
+                                      annotation_text=f"Mean: {metric_data.mean():.4f}")
+                        fig.add_vline(x=metric_data.min(), line_dash="dot", line_color="green",
+                                      annotation_text=f"Best: {metric_data.min():.4f}" if metric != 'r2' else f"Best: {metric_data.max():.4f}")
+                        fig.update_layout(template="plotly_dark", height=350)
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    with col2:
+                        # Stats summary
+                        st.markdown(f"**{metric.upper()} Statistics:**")
+                        stats_df = pd.DataFrame({
+                            'Statistic': ['Mean', 'Std Dev', 'Min', 'Max', 'Median', '25th %ile', '75th %ile'],
+                            'Value': [
+                                f"{metric_data.mean():.4f}",
+                                f"{metric_data.std():.4f}",
+                                f"{metric_data.min():.4f}",
+                                f"{metric_data.max():.4f}",
+                                f"{metric_data.median():.4f}",
+                                f"{metric_data.quantile(0.25):.4f}",
+                                f"{metric_data.quantile(0.75):.4f}"
+                            ]
+                        })
+                        st.dataframe(stats_df, use_container_width=True, hide_index=True)
+        
+        with viz_tab4:
+            st.markdown("### Top Performing Configurations")
+            
+            # Sort by best metric
+            sort_metric = st.selectbox("Rank by", available_metrics, key="rank_metric")
+            ascending = sort_metric in ['rmse', 'mae', 'mse', 'mape']  # Lower is better for errors
+            
+            # Filter and sort
+            valid_df = df[df[sort_metric].notna()].copy()
+            valid_df = valid_df.sort_values(sort_metric, ascending=ascending)
+            
+            # Show top 10
+            top_n = min(10, len(valid_df))
+            if top_n > 0:
+                top_configs = valid_df.head(top_n).copy()
+                top_configs.insert(0, 'Rank', range(1, top_n + 1))
+                
+                # Highlight the display columns
+                display_cols = ['Rank'] + hyperparam_cols + available_metrics
+                display_cols = [c for c in display_cols if c in top_configs.columns]
+                
+                st.dataframe(
+                    top_configs[display_cols],
+                    use_container_width=True,
+                    hide_index=True
+                )
+                
+                # Parallel coordinates plot for top configs
+                if len(numeric_params) >= 2:
+                    st.markdown("### Parallel Coordinates - Top 10 Configurations")
+                    
+                    plot_cols = numeric_params[:5] + [sort_metric]  # Limit to 5 params + metric
+                    plot_cols = [c for c in plot_cols if c in top_configs.columns]
+                    
+                    if len(plot_cols) >= 3:
+                        fig = px.parallel_coordinates(
+                            top_configs,
+                            dimensions=plot_cols,
+                            color=sort_metric,
+                            color_continuous_scale='RdYlGn_r' if ascending else 'RdYlGn',
+                            title="Hyperparameter Patterns in Top Configurations"
+                        )
+                        fig.update_layout(template="plotly_dark", height=500)
+                        st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No configurations with valid metrics found")
+        
+        # Raw data expander
+        with st.expander("📋 View All Data"):
+            st.dataframe(df, use_container_width=True)
+
     def render_sidebar(self):
         """Sidebar with controls and info."""
         with st.sidebar:
@@ -751,9 +1073,10 @@ class HockeyDashboard:
         self.render_sidebar()
         
         # Main content
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "Overview",
             "Experiments",
+            "Hyperparams",
             "Advanced Metrics",
             "Data",
             "Leaderboard"
@@ -770,12 +1093,15 @@ class HockeyDashboard:
             self.render_hyperparameter_space(runs_df)
         
         with tab3:
-            self.render_advanced_metrics(runs_df)
+            self.render_hyperparam_graphs()
         
         with tab4:
-            self.render_data_uploader()
+            self.render_advanced_metrics(runs_df)
         
         with tab5:
+            self.render_data_uploader()
+        
+        with tab6:
             st.subheader("Model Leaderboard")
             if not runs_df.empty and 'metrics.test_r2' in runs_df.columns:
                 # Build column list dynamically
