@@ -7,6 +7,7 @@ This script:
 3. Compares all models
 4. Saves the best model for production
 5. Generates a comprehensive report
+6. Includes hockey-specific feature engineering
 
 Run this after hyperparameter searches complete.
 """
@@ -28,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score
 from sklearn.linear_model import Ridge, Lasso
+from hockey_feature_engineering import HockeyFeatureEngineer
 from sklearn.ensemble import RandomForestRegressor
 import xgboost as xgb
 
@@ -169,11 +171,25 @@ class AutomatedModelSelection:
             
             print(f"  [OK] Loaded: {len(df)} rows, {len(df.columns)} columns")
             
+            # HOCKEY FEATURE ENGINEERING
+            # Check if this is hockey data (has relevant columns)
+            hockey_cols = ['travel_distance', 'rest_time', 'injuries', 'clinch_status', 
+                          'GF', 'GA', 'W', 'L', 'STRK', 'division']
+            is_hockey = any(col in df.columns or 
+                           any(hc in col for hc in hockey_cols) 
+                           for col in df.columns)
+            
+            if is_hockey:
+                print("   [OK] Detected hockey data - applying domain-specific features")
+                engineer = HockeyFeatureEngineer(df)
+                df, new_features = engineer.create_all_features()
+                print(f"   [OK] Added {len(new_features)} hockey features")
+            
             # Try to identify target column (flexible keywords)
             target_cols = [col for col in df.columns if any(
                 keyword in col.lower() for keyword in ['target', 'label', 'y', 'outcome', 'result', 
                                                         'prediction', 'score', 'value', 'price', 
-                                                        'amount', 'total', 'win', 'loss']
+                                                        'amount', 'total', 'win', 'loss', 'points']
             )]
             
             if target_cols:
