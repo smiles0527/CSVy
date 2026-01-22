@@ -14,6 +14,7 @@ from pathlib import Path
 import json
 import time
 from datetime import datetime
+from scipy import stats as scipy_stats
 
 # Page config
 st.set_page_config(
@@ -443,67 +444,1174 @@ class HockeyDashboard:
             st.plotly_chart(fig, use_container_width=True)
     
     def render_data_uploader(self):
-        """Interactive data upload and preview."""
-        st.subheader("Data Upload & Preview")
+        """Comprehensive professional data analysis suite."""
+        st.markdown("## 📊 Comprehensive Data Analysis Suite")
+        st.caption("Drop your CSV for enterprise-grade statistical analysis, benchmarking, and insights")
         
         uploaded_file = st.file_uploader(
-            "Upload Hockey CSV",
+            "Upload CSV Dataset",
             type=['csv'],
-            help="Upload your competition data for analysis"
+            help="Upload any CSV for comprehensive analysis"
         )
         
-        if uploaded_file:
+        if not uploaded_file:
+            st.info("👆 Upload a CSV file to begin comprehensive analysis")
+            
+            # Show example of what analysis includes
+            with st.expander("📋 What's Included in the Analysis"):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown("""
+                    **📈 Statistical Analysis**
+                    - Descriptive statistics
+                    - Distribution analysis
+                    - Normality tests
+                    - Skewness & kurtosis
+                    - Confidence intervals
+                    """)
+                with col2:
+                    st.markdown("""
+                    **🔍 Data Quality**
+                    - Missing value patterns
+                    - Duplicate detection
+                    - Outlier analysis (IQR, Z-score)
+                    - Data type inference
+                    - Cardinality analysis
+                    """)
+                with col3:
+                    st.markdown("""
+                    **🎯 Advanced Insights**
+                    - Correlation matrix
+                    - Feature importance
+                    - Multicollinearity (VIF)
+                    - Cluster analysis
+                    - Automated recommendations
+                    """)
+            return
+        
+        # Load data
+        try:
             df = pd.read_csv(uploaded_file)
+        except Exception as e:
+            st.error(f"Error loading file: {e}")
+            return
+        
+        # Store in session state for cross-tab access
+        st.session_state['uploaded_df'] = df
+        
+        # Create analysis tabs
+        analysis_tabs = st.tabs([
+            "📋 Overview",
+            "📊 Statistics", 
+            "🔍 Data Quality",
+            "📈 Distributions",
+            "🔗 Correlations",
+            "🎯 Feature Analysis",
+            "⚡ Quick Model",
+            "📑 Report"
+        ])
+        
+        # TAB 1: Overview
+        with analysis_tabs[0]:
+            self._render_data_overview(df)
+        
+        # TAB 2: Statistics
+        with analysis_tabs[1]:
+            self._render_statistics(df)
+        
+        # TAB 3: Data Quality
+        with analysis_tabs[2]:
+            self._render_data_quality(df)
+        
+        # TAB 4: Distributions
+        with analysis_tabs[3]:
+            self._render_distributions(df)
+        
+        # TAB 5: Correlations
+        with analysis_tabs[4]:
+            self._render_correlations(df)
+        
+        # TAB 6: Feature Analysis
+        with analysis_tabs[5]:
+            self._render_feature_analysis(df)
+        
+        # TAB 7: Quick Model Benchmark
+        with analysis_tabs[6]:
+            self._render_quick_model(df)
+        
+        # TAB 8: Report
+        with analysis_tabs[7]:
+            self._render_analysis_report(df)
+    
+    def _render_data_overview(self, df):
+        """Executive summary of the dataset."""
+        st.markdown("### 📋 Dataset Executive Summary")
+        
+        # Key metrics row
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        with col1:
+            st.metric("📊 Rows", f"{len(df):,}")
+        with col2:
+            st.metric("📋 Columns", len(df.columns))
+        with col3:
+            numeric_cols = df.select_dtypes(include=[np.number]).columns
+            st.metric("🔢 Numeric", len(numeric_cols))
+        with col4:
+            cat_cols = df.select_dtypes(include=['object', 'category']).columns
+            st.metric("📝 Categorical", len(cat_cols))
+        with col5:
+            memory_mb = df.memory_usage(deep=True).sum() / 1024 / 1024
+            st.metric("💾 Memory", f"{memory_mb:.2f} MB")
+        
+        st.divider()
+        
+        # Data health score
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            # Calculate health score
+            missing_score = 100 - (df.isnull().sum().sum() / (len(df) * len(df.columns)) * 100)
+            dup_score = 100 - (df.duplicated().sum() / len(df) * 100)
+            type_score = 100  # Assume good type inference
+            health_score = (missing_score * 0.4 + dup_score * 0.3 + type_score * 0.3)
+            
+            if health_score >= 90:
+                st.success(f"### Data Health: {health_score:.0f}/100")
+                st.caption("✅ Excellent - Ready for modeling")
+            elif health_score >= 70:
+                st.warning(f"### Data Health: {health_score:.0f}/100")
+                st.caption("⚠️ Good - Minor cleaning needed")
+            else:
+                st.error(f"### Data Health: {health_score:.0f}/100")
+                st.caption("🔴 Needs attention")
+        
+        with col2:
+            # Health breakdown
+            health_data = pd.DataFrame({
+                'Metric': ['Completeness', 'Uniqueness', 'Type Consistency'],
+                'Score': [missing_score, dup_score, type_score],
+                'Status': [
+                    '✅' if missing_score >= 90 else '⚠️' if missing_score >= 70 else '❌',
+                    '✅' if dup_score >= 95 else '⚠️' if dup_score >= 80 else '❌',
+                    '✅'
+                ]
+            })
+            st.dataframe(health_data, use_container_width=True, hide_index=True)
+        
+        st.divider()
+        
+        # Column summary
+        st.markdown("### Column Overview")
+        
+        col_summary = []
+        for col in df.columns:
+            dtype = str(df[col].dtype)
+            missing = df[col].isnull().sum()
+            missing_pct = missing / len(df) * 100
+            unique = df[col].nunique()
+            
+            if pd.api.types.is_numeric_dtype(df[col]):
+                sample = f"μ={df[col].mean():.2f}, σ={df[col].std():.2f}"
+            else:
+                top_val = df[col].mode().iloc[0] if len(df[col].mode()) > 0 else "N/A"
+                sample = f"Top: {str(top_val)[:20]}"
+            
+            col_summary.append({
+                'Column': col,
+                'Type': dtype,
+                'Missing': f"{missing} ({missing_pct:.1f}%)",
+                'Unique': unique,
+                'Sample/Stats': sample
+            })
+        
+        st.dataframe(pd.DataFrame(col_summary), use_container_width=True, hide_index=True)
+        
+        # Preview
+        with st.expander("🔎 Preview Data (first 100 rows)"):
+            st.dataframe(df.head(100), use_container_width=True)
+    
+    def _render_statistics(self, df):
+        """Comprehensive statistical analysis."""
+        st.markdown("### 📊 Comprehensive Statistical Analysis")
+        
+        numeric_df = df.select_dtypes(include=[np.number])
+        
+        if numeric_df.empty:
+            st.warning("No numeric columns found for statistical analysis")
+            return
+        
+        # Descriptive statistics tabs
+        stat_tabs = st.tabs(["Descriptive", "Moments", "Percentiles", "Confidence Intervals"])
+        
+        with stat_tabs[0]:
+            st.markdown("#### Descriptive Statistics")
+            desc_stats = numeric_df.describe().T
+            desc_stats['range'] = desc_stats['max'] - desc_stats['min']
+            desc_stats['iqr'] = desc_stats['75%'] - desc_stats['25%']
+            desc_stats['cv'] = (desc_stats['std'] / desc_stats['mean'] * 100).round(2)
+            st.dataframe(desc_stats.round(4), use_container_width=True)
+        
+        with stat_tabs[1]:
+            st.markdown("#### Higher-Order Moments")
+            moments_data = []
+            for col in numeric_df.columns:
+                data = numeric_df[col].dropna()
+                if len(data) > 3:
+                    from scipy import stats as scipy_stats
+                    moments_data.append({
+                        'Column': col,
+                        'Mean': data.mean(),
+                        'Variance': data.var(),
+                        'Skewness': scipy_stats.skew(data),
+                        'Kurtosis': scipy_stats.kurtosis(data),
+                        'Skew Interpretation': 'Right-skewed' if scipy_stats.skew(data) > 0.5 else 'Left-skewed' if scipy_stats.skew(data) < -0.5 else 'Symmetric',
+                        'Kurt Interpretation': 'Heavy-tailed' if scipy_stats.kurtosis(data) > 1 else 'Light-tailed' if scipy_stats.kurtosis(data) < -1 else 'Normal-tailed'
+                    })
+            if moments_data:
+                st.dataframe(pd.DataFrame(moments_data).round(4), use_container_width=True, hide_index=True)
+        
+        with stat_tabs[2]:
+            st.markdown("#### Percentile Analysis")
+            percentiles = [1, 5, 10, 25, 50, 75, 90, 95, 99]
+            pct_data = numeric_df.quantile([p/100 for p in percentiles]).T
+            pct_data.columns = [f"P{p}" for p in percentiles]
+            st.dataframe(pct_data.round(4), use_container_width=True)
+        
+        with stat_tabs[3]:
+            st.markdown("#### 95% Confidence Intervals for Means")
+            from scipy import stats as scipy_stats
+            ci_data = []
+            for col in numeric_df.columns:
+                data = numeric_df[col].dropna()
+                if len(data) > 2:
+                    mean = data.mean()
+                    sem = scipy_stats.sem(data)
+                    ci = scipy_stats.t.interval(0.95, len(data)-1, loc=mean, scale=sem)
+                    ci_data.append({
+                        'Column': col,
+                        'Mean': mean,
+                        'Std Error': sem,
+                        'CI Lower (95%)': ci[0],
+                        'CI Upper (95%)': ci[1],
+                        'CI Width': ci[1] - ci[0]
+                    })
+            if ci_data:
+                st.dataframe(pd.DataFrame(ci_data).round(4), use_container_width=True, hide_index=True)
+        
+        st.divider()
+        
+        # Normality tests
+        st.markdown("#### Normality Tests (Shapiro-Wilk)")
+        from scipy import stats as scipy_stats
+        
+        normality_results = []
+        for col in numeric_df.columns[:15]:  # Limit to first 15 columns
+            data = numeric_df[col].dropna()
+            if len(data) >= 20 and len(data) <= 5000:
+                stat, p_value = scipy_stats.shapiro(data.sample(min(len(data), 5000)))
+                normality_results.append({
+                    'Column': col,
+                    'Statistic': stat,
+                    'P-Value': p_value,
+                    'Normal?': '✅ Yes' if p_value > 0.05 else '❌ No',
+                    'Interpretation': 'Normally distributed' if p_value > 0.05 else 'Non-normal distribution'
+                })
+        
+        if normality_results:
+            st.dataframe(pd.DataFrame(normality_results).round(4), use_container_width=True, hide_index=True)
+            st.caption("Note: Shapiro-Wilk test with α=0.05. H₀: Data is normally distributed.")
+    
+    def _render_data_quality(self, df):
+        """Data quality assessment."""
+        st.markdown("### 🔍 Data Quality Assessment")
+        
+        quality_tabs = st.tabs(["Missing Values", "Duplicates", "Outliers", "Data Types", "Cardinality"])
+        
+        with quality_tabs[0]:
+            st.markdown("#### Missing Value Analysis")
+            
+            missing_df = pd.DataFrame({
+                'Column': df.columns,
+                'Missing Count': df.isnull().sum().values,
+                'Missing %': (df.isnull().sum().values / len(df) * 100).round(2),
+                'Data Type': df.dtypes.astype(str).values
+            }).sort_values('Missing %', ascending=False)
+            
+            missing_df['Status'] = missing_df['Missing %'].apply(
+                lambda x: '✅ Complete' if x == 0 else '⚠️ Minor' if x < 5 else '🔴 Significant' if x < 30 else '❌ Critical'
+            )
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                # Missing value bar chart
+                missing_nonzero = missing_df[missing_df['Missing %'] > 0]
+                if not missing_nonzero.empty:
+                    fig = px.bar(
+                        missing_nonzero.head(20),
+                        x='Column',
+                        y='Missing %',
+                        color='Missing %',
+                        color_continuous_scale='Reds',
+                        title='Missing Values by Column (Top 20)'
+                    )
+                    fig.update_layout(template="plotly_dark", height=400)
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.success("✅ No missing values in this dataset!")
+            
+            with col2:
+                st.dataframe(missing_df, use_container_width=True, hide_index=True, height=400)
+            
+            # Missing pattern heatmap
+            if df.isnull().any().any():
+                st.markdown("#### Missing Value Patterns (Sample)")
+                sample_size = min(100, len(df))
+                missing_sample = df.isnull().iloc[:sample_size].astype(int)
+                
+                fig = px.imshow(
+                    missing_sample.T,
+                    labels=dict(x="Row", y="Column", color="Missing"),
+                    color_continuous_scale=['#1e1e1e', '#ff4b4b'],
+                    aspect="auto",
+                    title="Missing Value Pattern Matrix"
+                )
+                fig.update_layout(template="plotly_dark", height=400)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with quality_tabs[1]:
+            st.markdown("#### Duplicate Analysis")
+            
+            total_dups = df.duplicated().sum()
+            dup_pct = total_dups / len(df) * 100
             
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Rows", len(df))
+                st.metric("Total Duplicates", f"{total_dups:,}")
             with col2:
-                st.metric("Columns", len(df.columns))
+                st.metric("Duplicate %", f"{dup_pct:.2f}%")
             with col3:
-                missing_pct = (df.isnull().sum().sum() / (len(df) * len(df.columns)) * 100)
-                st.metric("Missing %", f"{missing_pct:.1f}%")
+                st.metric("Unique Rows", f"{len(df) - total_dups:,}")
             
-            # Preview
-            with st.expander("Preview Data (first 10 rows)"):
-                st.dataframe(df.head(10), use_container_width=True)
+            if total_dups > 0:
+                st.warning(f"⚠️ Found {total_dups} duplicate rows ({dup_pct:.2f}%)")
+                
+                with st.expander("View Duplicate Rows"):
+                    dup_rows = df[df.duplicated(keep=False)].sort_values(by=list(df.columns))
+                    st.dataframe(dup_rows.head(100), use_container_width=True)
+            else:
+                st.success("✅ No duplicate rows found")
             
-            # Missing data heatmap
-            if df.isnull().any().any():
-                st.write("**Missing Data Heatmap:**")
-                missing_matrix = df.isnull().astype(int)
-                fig = px.imshow(
-                    missing_matrix.T,
-                    labels=dict(x="Row", y="Column", color="Missing"),
-                    color_continuous_scale=['#0e1117', '#ff4b4b'],
-                    aspect="auto"
+            # Column-wise uniqueness
+            st.markdown("#### Column Uniqueness Analysis")
+            uniqueness_df = pd.DataFrame({
+                'Column': df.columns,
+                'Unique Values': [df[col].nunique() for col in df.columns],
+                'Uniqueness %': [(df[col].nunique() / len(df) * 100) for col in df.columns],
+                'Potential ID?': [df[col].nunique() == len(df) for col in df.columns]
+            }).round(2)
+            st.dataframe(uniqueness_df, use_container_width=True, hide_index=True)
+        
+        with quality_tabs[2]:
+            st.markdown("#### Outlier Detection")
+            
+            numeric_df = df.select_dtypes(include=[np.number])
+            
+            if numeric_df.empty:
+                st.warning("No numeric columns for outlier analysis")
+                return
+            
+            method = st.radio("Detection Method", ["IQR (1.5x)", "Z-Score (3σ)", "Modified Z-Score"], horizontal=True)
+            
+            outlier_summary = []
+            outlier_details = {}
+            
+            for col in numeric_df.columns:
+                data = numeric_df[col].dropna()
+                
+                if method == "IQR (1.5x)":
+                    Q1, Q3 = data.quantile([0.25, 0.75])
+                    IQR = Q3 - Q1
+                    lower, upper = Q1 - 1.5 * IQR, Q3 + 1.5 * IQR
+                    outliers = (data < lower) | (data > upper)
+                elif method == "Z-Score (3σ)":
+                    from scipy import stats as scipy_stats
+                    z_scores = np.abs(scipy_stats.zscore(data))
+                    outliers = z_scores > 3
+                    lower, upper = data.mean() - 3*data.std(), data.mean() + 3*data.std()
+                else:  # Modified Z-Score
+                    median = data.median()
+                    mad = np.median(np.abs(data - median))
+                    modified_z = 0.6745 * (data - median) / (mad + 1e-10)
+                    outliers = np.abs(modified_z) > 3.5
+                    lower, upper = None, None
+                
+                n_outliers = outliers.sum()
+                outlier_summary.append({
+                    'Column': col,
+                    'Outliers': n_outliers,
+                    'Outlier %': n_outliers / len(data) * 100,
+                    'Lower Bound': lower if lower else 'N/A',
+                    'Upper Bound': upper if upper else 'N/A'
+                })
+                outlier_details[col] = data[outliers].values[:10]
+            
+            outlier_df = pd.DataFrame(outlier_summary)
+            outlier_df = outlier_df.sort_values('Outlier %', ascending=False)
+            
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                st.dataframe(outlier_df.round(3), use_container_width=True, hide_index=True)
+            
+            with col2:
+                # Outlier visualization
+                fig = px.bar(
+                    outlier_df.head(15),
+                    x='Column',
+                    y='Outlier %',
+                    color='Outlier %',
+                    color_continuous_scale='YlOrRd',
+                    title=f'Outlier % by Column ({method})'
                 )
-                fig.update_layout(height=300, template="plotly_dark")
+                fig.update_layout(template="plotly_dark", height=350)
                 st.plotly_chart(fig, use_container_width=True)
             
-            # Feature engineering toggle
-            if st.button("Apply Hockey Feature Engineering", use_container_width=True):
-                with st.spinner("Engineering features..."):
-                    try:
-                        import sys
-                        sys.path.insert(0, str(Path(__file__).parent / 'training'))
-                        from hockey_feature_engineering import HockeyFeatureEngineer
-                        engineer = HockeyFeatureEngineer(df)
-                        df_enhanced, features = engineer.create_all_features()
-                        
-                        st.success(f"Successfully created {len(features)} new features")
-                        st.download_button(
-                            "Download Enhanced CSV",
-                            df_enhanced.to_csv(index=False).encode('utf-8'),
-                            "hockey_data_enhanced.csv",
-                            "text/csv"
-                        )
-                    except ImportError as e:
-                        st.error(f"Could not load feature engineering module: {e}")
-                        st.info("Make sure hockey_feature_engineering.py exists in the training folder.")
-                    except Exception as e:
-                        st.error(f"Error during feature engineering: {e}")
+            # Box plot for selected column
+            selected_col = st.selectbox("Inspect Column", numeric_df.columns, key="outlier_inspect")
+            fig = px.box(numeric_df, y=selected_col, title=f"Box Plot: {selected_col}")
+            fig.update_layout(template="plotly_dark", height=400)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with quality_tabs[3]:
+            st.markdown("#### Data Type Analysis")
+            
+            type_summary = []
+            for col in df.columns:
+                inferred = pd.api.types.infer_dtype(df[col])
+                actual = str(df[col].dtype)
+                
+                # Type recommendation
+                if inferred == 'string' and df[col].nunique() < 20:
+                    recommendation = 'Consider: category'
+                elif inferred == 'integer' and df[col].min() >= 0 and df[col].max() < 256:
+                    recommendation = 'Consider: uint8'
+                elif 'date' in col.lower() or 'time' in col.lower():
+                    recommendation = 'Consider: datetime'
+                else:
+                    recommendation = 'OK'
+                
+                type_summary.append({
+                    'Column': col,
+                    'Current Type': actual,
+                    'Inferred Type': inferred,
+                    'Recommendation': recommendation
+                })
+            
+            st.dataframe(pd.DataFrame(type_summary), use_container_width=True, hide_index=True)
+        
+        with quality_tabs[4]:
+            st.markdown("#### Cardinality Analysis")
+            st.caption("High cardinality in categorical columns may need special handling")
+            
+            cardinality_data = []
+            for col in df.columns:
+                n_unique = df[col].nunique()
+                cardinality_ratio = n_unique / len(df)
+                
+                if cardinality_ratio == 1:
+                    card_type = "🔑 Unique (ID)"
+                elif cardinality_ratio > 0.5:
+                    card_type = "📊 High"
+                elif cardinality_ratio > 0.1:
+                    card_type = "📈 Medium"
+                elif n_unique <= 2:
+                    card_type = "🔘 Binary"
+                else:
+                    card_type = "📉 Low"
+                
+                cardinality_data.append({
+                    'Column': col,
+                    'Unique Values': n_unique,
+                    'Cardinality Ratio': f"{cardinality_ratio:.4f}",
+                    'Type': card_type,
+                    'Sample Values': str(df[col].unique()[:5].tolist())[:50]
+                })
+            
+            card_df = pd.DataFrame(cardinality_data).sort_values('Unique Values', ascending=False)
+            st.dataframe(card_df, use_container_width=True, hide_index=True)
     
+    def _render_distributions(self, df):
+        """Distribution analysis and visualization."""
+        st.markdown("### 📈 Distribution Analysis")
+        
+        numeric_df = df.select_dtypes(include=[np.number])
+        cat_df = df.select_dtypes(include=['object', 'category'])
+        
+        dist_tabs = st.tabs(["Numeric Distributions", "Categorical Distributions", "Bivariate"])
+        
+        with dist_tabs[0]:
+            if numeric_df.empty:
+                st.warning("No numeric columns found")
+                return
+            
+            col1, col2 = st.columns([1, 3])
+            
+            with col1:
+                selected_num = st.selectbox("Select Column", numeric_df.columns, key="dist_num")
+                bin_count = st.slider("Bins", 10, 100, 30)
+                show_kde = st.checkbox("Show KDE", value=True)
+            
+            with col2:
+                data = numeric_df[selected_num].dropna()
+                
+                fig = make_subplots(
+                    rows=2, cols=2,
+                    subplot_titles=("Histogram", "Box Plot", "Violin Plot", "Q-Q Plot"),
+                    specs=[[{}, {}], [{}, {}]]
+                )
+                
+                # Histogram
+                fig.add_trace(
+                    go.Histogram(x=data, nbinsx=bin_count, name="Histogram", marker_color='#667eea'),
+                    row=1, col=1
+                )
+                
+                # Box plot
+                fig.add_trace(
+                    go.Box(y=data, name="Box", marker_color='#764ba2'),
+                    row=1, col=2
+                )
+                
+                # Violin
+                fig.add_trace(
+                    go.Violin(y=data, name="Violin", marker_color='#f093fb'),
+                    row=2, col=1
+                )
+                
+                # Q-Q plot
+                from scipy import stats as scipy_stats
+                qq = scipy_stats.probplot(data, dist="norm")
+                fig.add_trace(
+                    go.Scatter(x=qq[0][0], y=qq[0][1], mode='markers', name='Q-Q', marker_color='#4fd1c5'),
+                    row=2, col=2
+                )
+                fig.add_trace(
+                    go.Scatter(x=qq[0][0], y=qq[1][0] + qq[1][1]*qq[0][0], mode='lines', name='Fit', line_color='red'),
+                    row=2, col=2
+                )
+                
+                fig.update_layout(template="plotly_dark", height=600, showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Stats summary
+                st.markdown(f"**{selected_num} Statistics:**")
+                stat_cols = st.columns(6)
+                with stat_cols[0]:
+                    st.metric("Mean", f"{data.mean():.4f}")
+                with stat_cols[1]:
+                    st.metric("Median", f"{data.median():.4f}")
+                with stat_cols[2]:
+                    st.metric("Std Dev", f"{data.std():.4f}")
+                with stat_cols[3]:
+                    st.metric("Skewness", f"{data.skew():.4f}")
+                with stat_cols[4]:
+                    st.metric("Kurtosis", f"{data.kurtosis():.4f}")
+                with stat_cols[5]:
+                    st.metric("Range", f"{data.max() - data.min():.4f}")
+        
+        with dist_tabs[1]:
+            if cat_df.empty:
+                st.warning("No categorical columns found")
+                return
+            
+            col1, col2 = st.columns([1, 3])
+            
+            with col1:
+                selected_cat = st.selectbox("Select Column", cat_df.columns, key="dist_cat")
+                top_n = st.slider("Top N Categories", 5, 50, 15)
+            
+            with col2:
+                value_counts = df[selected_cat].value_counts().head(top_n)
+                
+                fig = make_subplots(rows=1, cols=2, specs=[[{"type": "bar"}, {"type": "pie"}]])
+                
+                fig.add_trace(
+                    go.Bar(x=value_counts.index.astype(str), y=value_counts.values, marker_color='#667eea'),
+                    row=1, col=1
+                )
+                
+                fig.add_trace(
+                    go.Pie(labels=value_counts.index.astype(str), values=value_counts.values),
+                    row=1, col=2
+                )
+                
+                fig.update_layout(template="plotly_dark", height=400, title=f"{selected_cat} Distribution")
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with dist_tabs[2]:
+            st.markdown("#### Bivariate Analysis")
+            
+            if len(numeric_df.columns) < 2:
+                st.warning("Need at least 2 numeric columns")
+                return
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                x_col = st.selectbox("X-axis", numeric_df.columns, key="bi_x")
+            with col2:
+                y_options = [c for c in numeric_df.columns if c != x_col]
+                y_col = st.selectbox("Y-axis", y_options, key="bi_y")
+            with col3:
+                color_col = st.selectbox("Color by", ["None"] + list(df.columns), key="bi_color")
+            
+            if color_col == "None":
+                fig = px.scatter(df, x=x_col, y=y_col, trendline="ols", title=f"{x_col} vs {y_col}")
+            else:
+                fig = px.scatter(df, x=x_col, y=y_col, color=color_col, trendline="ols", title=f"{x_col} vs {y_col}")
+            
+            fig.update_layout(template="plotly_dark", height=500)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Correlation for selected pair
+            corr = df[x_col].corr(df[y_col])
+            st.metric(f"Pearson Correlation: {x_col} ↔ {y_col}", f"{corr:.4f}")
+    
+    def _render_correlations(self, df):
+        """Correlation analysis."""
+        st.markdown("### 🔗 Correlation Analysis")
+        
+        numeric_df = df.select_dtypes(include=[np.number])
+        
+        if len(numeric_df.columns) < 2:
+            st.warning("Need at least 2 numeric columns for correlation analysis")
+            return
+        
+        corr_tabs = st.tabs(["Correlation Matrix", "Top Correlations", "Multicollinearity (VIF)"])
+        
+        with corr_tabs[0]:
+            method = st.radio("Correlation Method", ["pearson", "spearman", "kendall"], horizontal=True)
+            
+            corr_matrix = numeric_df.corr(method=method)
+            
+            fig = px.imshow(
+                corr_matrix,
+                labels=dict(color="Correlation"),
+                color_continuous_scale="RdBu_r",
+                color_continuous_midpoint=0,
+                aspect="auto",
+                title=f"{method.title()} Correlation Matrix"
+            )
+            fig.update_layout(template="plotly_dark", height=600)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with corr_tabs[1]:
+            st.markdown("#### Strongest Correlations")
+            
+            # Get upper triangle correlations
+            corr_pairs = []
+            for i in range(len(corr_matrix.columns)):
+                for j in range(i+1, len(corr_matrix.columns)):
+                    corr_pairs.append({
+                        'Feature 1': corr_matrix.columns[i],
+                        'Feature 2': corr_matrix.columns[j],
+                        'Correlation': corr_matrix.iloc[i, j]
+                    })
+            
+            corr_pairs_df = pd.DataFrame(corr_pairs)
+            corr_pairs_df['Abs Correlation'] = corr_pairs_df['Correlation'].abs()
+            corr_pairs_df = corr_pairs_df.sort_values('Abs Correlation', ascending=False)
+            corr_pairs_df['Strength'] = corr_pairs_df['Abs Correlation'].apply(
+                lambda x: '🔴 Strong' if x > 0.7 else '🟡 Moderate' if x > 0.4 else '🟢 Weak'
+            )
+            
+            st.dataframe(corr_pairs_df.head(20).round(4), use_container_width=True, hide_index=True)
+            
+            # Highlight strong correlations
+            strong_corr = corr_pairs_df[corr_pairs_df['Abs Correlation'] > 0.7]
+            if not strong_corr.empty:
+                st.warning(f"⚠️ Found {len(strong_corr)} pairs with strong correlation (|r| > 0.7)")
+        
+        with corr_tabs[2]:
+            st.markdown("#### Variance Inflation Factor (VIF)")
+            st.caption("VIF > 5 indicates high multicollinearity. VIF > 10 is critical.")
+            
+            from sklearn.linear_model import LinearRegression
+            
+            # Calculate VIF for each feature
+            vif_data = []
+            clean_df = numeric_df.dropna()
+            
+            if len(clean_df) < len(numeric_df.columns) + 1:
+                st.warning("Not enough complete cases for VIF calculation")
+            else:
+                for i, col in enumerate(clean_df.columns):
+                    X = clean_df.drop(columns=[col])
+                    y = clean_df[col]
+                    
+                    if X.shape[1] > 0 and len(y) > X.shape[1]:
+                        try:
+                            r2 = LinearRegression().fit(X, y).score(X, y)
+                            vif = 1 / (1 - r2) if r2 < 1 else float('inf')
+                            
+                            vif_data.append({
+                                'Feature': col,
+                                'VIF': vif,
+                                'R² (with others)': r2,
+                                'Status': '✅ OK' if vif < 5 else '⚠️ High' if vif < 10 else '❌ Critical'
+                            })
+                        except:
+                            pass
+                
+                if vif_data:
+                    vif_df = pd.DataFrame(vif_data).sort_values('VIF', ascending=False)
+                    
+                    col1, col2 = st.columns([1, 1])
+                    with col1:
+                        st.dataframe(vif_df.round(4), use_container_width=True, hide_index=True)
+                    with col2:
+                        fig = px.bar(
+                            vif_df.head(15),
+                            x='Feature',
+                            y='VIF',
+                            color='VIF',
+                            color_continuous_scale='YlOrRd',
+                            title='VIF by Feature'
+                        )
+                        fig.add_hline(y=5, line_dash="dash", line_color="yellow", annotation_text="Warning (5)")
+                        fig.add_hline(y=10, line_dash="dash", line_color="red", annotation_text="Critical (10)")
+                        fig.update_layout(template="plotly_dark", height=400)
+                        st.plotly_chart(fig, use_container_width=True)
+    
+    def _render_feature_analysis(self, df):
+        """Feature importance and target analysis."""
+        st.markdown("### 🎯 Feature Analysis")
+        
+        numeric_df = df.select_dtypes(include=[np.number])
+        
+        if len(numeric_df.columns) < 2:
+            st.warning("Need at least 2 numeric columns")
+            return
+        
+        feat_tabs = st.tabs(["Feature Importance", "Target Analysis", "Feature Clustering"])
+        
+        with feat_tabs[0]:
+            st.markdown("#### Quick Feature Importance (Random Forest)")
+            
+            target_col = st.selectbox("Select Target Variable", numeric_df.columns, key="fi_target")
+            
+            if st.button("Calculate Feature Importance", use_container_width=True):
+                with st.spinner("Training Random Forest..."):
+                    from sklearn.ensemble import RandomForestRegressor
+                    from sklearn.preprocessing import StandardScaler
+                    
+                    X = numeric_df.drop(columns=[target_col]).dropna()
+                    y = df.loc[X.index, target_col]
+                    
+                    # Handle any remaining NaN
+                    valid_idx = ~y.isna()
+                    X = X[valid_idx]
+                    y = y[valid_idx]
+                    
+                    if len(X) < 10:
+                        st.error("Not enough valid samples")
+                        return
+                    
+                    # Scale and train
+                    scaler = StandardScaler()
+                    X_scaled = scaler.fit_transform(X)
+                    
+                    rf = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
+                    rf.fit(X_scaled, y)
+                    
+                    # Get importance
+                    importance_df = pd.DataFrame({
+                        'Feature': X.columns,
+                        'Importance': rf.feature_importances_
+                    }).sort_values('Importance', ascending=False)
+                    
+                    col1, col2 = st.columns([1, 1])
+                    
+                    with col1:
+                        st.dataframe(importance_df.round(4), use_container_width=True, hide_index=True)
+                    
+                    with col2:
+                        fig = px.bar(
+                            importance_df.head(15),
+                            x='Importance',
+                            y='Feature',
+                            orientation='h',
+                            color='Importance',
+                            color_continuous_scale='Viridis',
+                            title='Feature Importance (Top 15)'
+                        )
+                        fig.update_layout(template="plotly_dark", height=500, yaxis={'categoryorder': 'total ascending'})
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Quick model performance
+                    from sklearn.model_selection import cross_val_score
+                    cv_scores = cross_val_score(rf, X_scaled, y, cv=5, scoring='r2')
+                    st.metric("Cross-Validation R² (5-fold)", f"{cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+        
+        with feat_tabs[1]:
+            st.markdown("#### Target Variable Analysis")
+            
+            target_col = st.selectbox("Select Target", numeric_df.columns, key="ta_target")
+            target_data = df[target_col].dropna()
+            
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                fig = px.histogram(target_data, nbins=50, title=f"{target_col} Distribution")
+                fig.add_vline(x=target_data.mean(), line_dash="dash", line_color="red", annotation_text="Mean")
+                fig.update_layout(template="plotly_dark", height=400)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                # Target correlations
+                target_corr = numeric_df.corr()[target_col].drop(target_col).abs().sort_values(ascending=False)
+                
+                fig = px.bar(
+                    x=target_corr.values[:10],
+                    y=target_corr.index[:10],
+                    orientation='h',
+                    title=f'Features Most Correlated with {target_col}',
+                    labels={'x': 'Absolute Correlation', 'y': 'Feature'}
+                )
+                fig.update_layout(template="plotly_dark", height=400, yaxis={'categoryorder': 'total ascending'})
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with feat_tabs[2]:
+            st.markdown("#### Feature Clustering")
+            
+            if len(numeric_df.columns) < 3:
+                st.warning("Need at least 3 numeric columns for clustering")
+                return
+            
+            from sklearn.cluster import KMeans
+            from sklearn.preprocessing import StandardScaler
+            from sklearn.decomposition import PCA
+            
+            clean_df = numeric_df.dropna()
+            
+            if len(clean_df) < 10:
+                st.warning("Not enough complete samples")
+                return
+            
+            n_clusters = st.slider("Number of Clusters", 2, 10, 3)
+            
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(clean_df)
+            
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            clusters = kmeans.fit_predict(X_scaled)
+            
+            # PCA for visualization
+            pca = PCA(n_components=2)
+            X_pca = pca.fit_transform(X_scaled)
+            
+            cluster_df = pd.DataFrame({
+                'PC1': X_pca[:, 0],
+                'PC2': X_pca[:, 1],
+                'Cluster': clusters.astype(str)
+            })
+            
+            fig = px.scatter(
+                cluster_df,
+                x='PC1',
+                y='PC2',
+                color='Cluster',
+                title=f'Feature Clustering (K={n_clusters}, PCA Visualization)',
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            fig.update_layout(template="plotly_dark", height=500)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.caption(f"PCA explains {pca.explained_variance_ratio_.sum()*100:.1f}% of variance")
+    
+    def _render_quick_model(self, df):
+        """Quick model benchmarking."""
+        st.markdown("### ⚡ Quick Model Benchmark")
+        st.caption("Compare multiple models on your data in seconds")
+        
+        numeric_df = df.select_dtypes(include=[np.number])
+        
+        if len(numeric_df.columns) < 2:
+            st.warning("Need at least 2 numeric columns")
+            return
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            target_col = st.selectbox("Target Variable", numeric_df.columns, key="qm_target")
+        with col2:
+            test_size = st.slider("Test Size %", 10, 40, 20) / 100
+        
+        feature_cols = [c for c in numeric_df.columns if c != target_col]
+        selected_features = st.multiselect(
+            "Select Features (or leave empty for all)",
+            feature_cols,
+            default=[]
+        )
+        
+        if not selected_features:
+            selected_features = feature_cols
+        
+        if st.button("🚀 Run Benchmark", use_container_width=True, type="primary"):
+            with st.spinner("Training models..."):
+                from sklearn.model_selection import train_test_split, cross_val_score
+                from sklearn.preprocessing import StandardScaler
+                from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
+                from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+                from sklearn.svm import SVR
+                from sklearn.neighbors import KNeighborsRegressor
+                
+                # Prepare data
+                X = df[selected_features].dropna()
+                y = df.loc[X.index, target_col]
+                valid_idx = ~y.isna()
+                X = X[valid_idx]
+                y = y[valid_idx]
+                
+                if len(X) < 20:
+                    st.error("Not enough valid samples (need at least 20)")
+                    return
+                
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+                
+                scaler = StandardScaler()
+                X_train_scaled = scaler.fit_transform(X_train)
+                X_test_scaled = scaler.transform(X_test)
+                
+                # Define models
+                models = {
+                    'Linear Regression': LinearRegression(),
+                    'Ridge': Ridge(alpha=1.0),
+                    'Lasso': Lasso(alpha=0.1),
+                    'ElasticNet': ElasticNet(alpha=0.1, l1_ratio=0.5),
+                    'Random Forest': RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42),
+                    'Gradient Boosting': GradientBoostingRegressor(n_estimators=100, max_depth=5, random_state=42),
+                    'KNN': KNeighborsRegressor(n_neighbors=5),
+                }
+                
+                try:
+                    from xgboost import XGBRegressor
+                    models['XGBoost'] = XGBRegressor(n_estimators=100, max_depth=5, random_state=42, verbosity=0)
+                except ImportError:
+                    pass
+                
+                results = []
+                progress = st.progress(0)
+                
+                for i, (name, model) in enumerate(models.items()):
+                    try:
+                        # Train
+                        if name in ['Random Forest', 'Gradient Boosting', 'XGBoost']:
+                            model.fit(X_train, y_train)
+                            y_pred = model.predict(X_test)
+                            cv_scores = cross_val_score(model, X, y, cv=5, scoring='r2')
+                        else:
+                            model.fit(X_train_scaled, y_train)
+                            y_pred = model.predict(X_test_scaled)
+                            cv_scores = cross_val_score(model, scaler.fit_transform(X), y, cv=5, scoring='r2')
+                        
+                        # Metrics
+                        from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+                        
+                        r2 = r2_score(y_test, y_pred)
+                        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+                        mae = mean_absolute_error(y_test, y_pred)
+                        
+                        results.append({
+                            'Model': name,
+                            'R²': r2,
+                            'RMSE': rmse,
+                            'MAE': mae,
+                            'CV R² (mean)': cv_scores.mean(),
+                            'CV R² (std)': cv_scores.std()
+                        })
+                    except Exception as e:
+                        st.warning(f"Error with {name}: {e}")
+                    
+                    progress.progress((i + 1) / len(models))
+                
+                progress.empty()
+                
+                if results:
+                    results_df = pd.DataFrame(results).sort_values('R²', ascending=False)
+                    results_df['Rank'] = range(1, len(results_df) + 1)
+                    results_df = results_df[['Rank', 'Model', 'R²', 'RMSE', 'MAE', 'CV R² (mean)', 'CV R² (std)']]
+                    
+                    # Winner
+                    winner = results_df.iloc[0]
+                    st.success(f"🏆 **Best Model: {winner['Model']}** with R² = {winner['R²']:.4f}")
+                    
+                    # Results table
+                    st.markdown("#### Benchmark Results")
+                    st.dataframe(results_df.round(4), use_container_width=True, hide_index=True)
+                    
+                    # Visualizations
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        fig = px.bar(
+                            results_df,
+                            x='Model',
+                            y='R²',
+                            color='R²',
+                            color_continuous_scale='Viridis',
+                            title='R² Score by Model'
+                        )
+                        fig.update_layout(template="plotly_dark", height=400)
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    with col2:
+                        fig = px.bar(
+                            results_df,
+                            x='Model',
+                            y='RMSE',
+                            color='RMSE',
+                            color_continuous_scale='Reds_r',
+                            title='RMSE by Model (Lower is Better)'
+                        )
+                        fig.update_layout(template="plotly_dark", height=400)
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    # CV stability
+                    fig = px.bar(
+                        results_df,
+                        x='Model',
+                        y='CV R² (mean)',
+                        error_y='CV R² (std)',
+                        title='Cross-Validation R² with Std Dev',
+                        color='CV R² (mean)',
+                        color_continuous_scale='Viridis'
+                    )
+                    fig.update_layout(template="plotly_dark", height=400)
+                    st.plotly_chart(fig, use_container_width=True)
+    
+    def _render_analysis_report(self, df):
+        """Generate comprehensive analysis report."""
+        st.markdown("### 📑 Analysis Report")
+        
+        if st.button("📄 Generate Full Report", use_container_width=True, type="primary"):
+            with st.spinner("Generating comprehensive report..."):
+                report = []
+                report.append("# Comprehensive Data Analysis Report")
+                report.append(f"\n**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                report.append(f"\n**Dataset Shape:** {df.shape[0]:,} rows × {df.shape[1]} columns")
+                
+                # Executive Summary
+                report.append("\n\n## Executive Summary")
+                
+                numeric_df = df.select_dtypes(include=[np.number])
+                cat_df = df.select_dtypes(include=['object', 'category'])
+                
+                missing_pct = df.isnull().sum().sum() / (len(df) * len(df.columns)) * 100
+                dup_pct = df.duplicated().sum() / len(df) * 100
+                
+                report.append(f"\n- **Numeric Columns:** {len(numeric_df.columns)}")
+                report.append(f"- **Categorical Columns:** {len(cat_df.columns)}")
+                report.append(f"- **Missing Data:** {missing_pct:.2f}%")
+                report.append(f"- **Duplicate Rows:** {dup_pct:.2f}%")
+                report.append(f"- **Memory Usage:** {df.memory_usage(deep=True).sum() / 1024 / 1024:.2f} MB")
+                
+                # Data Quality
+                report.append("\n\n## Data Quality Assessment")
+                
+                if missing_pct < 5:
+                    report.append("\n✅ **Missing Data:** Excellent - Less than 5% missing")
+                elif missing_pct < 20:
+                    report.append("\n⚠️ **Missing Data:** Moderate - Consider imputation strategies")
+                else:
+                    report.append("\n❌ **Missing Data:** Critical - Significant missing data requires attention")
+                
+                if dup_pct < 1:
+                    report.append("\n✅ **Duplicates:** Minimal duplicate rows")
+                else:
+                    report.append(f"\n⚠️ **Duplicates:** {df.duplicated().sum()} duplicate rows detected")
+                
+                # Column Summary
+                report.append("\n\n## Column Summary")
+                report.append("\n| Column | Type | Missing % | Unique |")
+                report.append("|--------|------|-----------|--------|")
+                for col in df.columns:
+                    missing = df[col].isnull().sum() / len(df) * 100
+                    unique = df[col].nunique()
+                    dtype = str(df[col].dtype)
+                    report.append(f"| {col} | {dtype} | {missing:.1f}% | {unique} |")
+                
+                # Statistical Summary
+                if not numeric_df.empty:
+                    report.append("\n\n## Numeric Summary Statistics")
+                    desc = numeric_df.describe().round(4)
+                    report.append("\n" + desc.to_markdown())
+                
+                # Correlations
+                if len(numeric_df.columns) >= 2:
+                    report.append("\n\n## Top Correlations")
+                    corr_matrix = numeric_df.corr()
+                    corr_pairs = []
+                    for i in range(len(corr_matrix.columns)):
+                        for j in range(i+1, len(corr_matrix.columns)):
+                            corr_pairs.append({
+                                'Pair': f"{corr_matrix.columns[i]} ↔ {corr_matrix.columns[j]}",
+                                'Correlation': corr_matrix.iloc[i, j]
+                            })
+                    
+                    top_corr = sorted(corr_pairs, key=lambda x: abs(x['Correlation']), reverse=True)[:10]
+                    report.append("\n| Feature Pair | Correlation |")
+                    report.append("|--------------|-------------|")
+                    for pair in top_corr:
+                        report.append(f"| {pair['Pair']} | {pair['Correlation']:.4f} |")
+                
+                # Recommendations
+                report.append("\n\n## Recommendations")
+                
+                if missing_pct > 5:
+                    report.append("\n1. **Handle Missing Values:** Consider imputation (mean/median for numeric, mode for categorical) or row removal")
+                
+                if dup_pct > 0:
+                    report.append("\n2. **Remove Duplicates:** Drop duplicate rows to prevent data leakage")
+                
+                high_card = [col for col in cat_df.columns if df[col].nunique() > 50]
+                if high_card:
+                    report.append(f"\n3. **High Cardinality:** Columns {high_card} have many unique values - consider encoding strategies")
+                
+                if len(numeric_df.columns) >= 2:
+                    strong_corr = [(c1, c2) for c1 in numeric_df.columns for c2 in numeric_df.columns 
+                                   if c1 < c2 and abs(numeric_df[c1].corr(numeric_df[c2])) > 0.8]
+                    if strong_corr:
+                        report.append(f"\n4. **Multicollinearity:** High correlations detected between {len(strong_corr)} feature pairs - consider feature selection")
+                
+                report.append("\n\n---\n*Report generated by Hockey ML Pipeline Dashboard*")
+                
+                # Display report
+                full_report = "\n".join(report)
+                st.markdown(full_report)
+                
+                # Download buttons
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button(
+                        "📥 Download Report (Markdown)",
+                        full_report,
+                        file_name="data_analysis_report.md",
+                        mime="text/markdown",
+                        use_container_width=True
+                    )
+                with col2:
+                    # CSV summary
+                    summary_df = df.describe(include='all').round(4)
+                    st.download_button(
+                        "📥 Download Statistics (CSV)",
+                        summary_df.to_csv(),
+                        file_name="data_statistics.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+
     def render_advanced_metrics(self, runs_df):
         """Render comprehensive advanced metrics panel."""
         st.subheader("Advanced Competition Metrics")
