@@ -75,11 +75,14 @@ class HockeyDashboard:
         try:
             mlflow.set_tracking_uri("file:///" + str(self.mlflow_path.absolute()))
             
+            # All available experiments
             experiments = {
                 "XGBoost": "xgboost_hyperparam_search",
                 "Linear": "linear_hyperparam_search",
                 "RandomForest": "random_forest_hyperparam_search",
-                "Elo": "elo_hyperparam_search"
+                "Elo": "elo_hyperparam_search",
+                "NeuralNetwork": "neural_network_hyperparam_search",
+                "TestTracking": "test_tracking"
             }
             
             all_runs = []
@@ -88,8 +91,9 @@ class HockeyDashboard:
                     exp = mlflow.get_experiment_by_name(exp_name)
                     if exp:
                         runs = mlflow.search_runs(experiment_ids=[exp.experiment_id])
-                        runs['model'] = model_name
-                        all_runs.append(runs)
+                        if not runs.empty:
+                            runs['model'] = model_name
+                            all_runs.append(runs)
                 except:
                     pass
             
@@ -157,13 +161,59 @@ class HockeyDashboard:
         with col4:
             latest_run = pd.to_datetime(runs_df['start_time']).max() if 'start_time' in runs_df.columns else None
             if latest_run:
-                # Remove timezone to avoid comparison issues
-                if hasattr(latest_run, 'tz') and latest_run.tz is not None:
-                    latest_run = latest_run.tz_localize(None)
+                # Convert to timezone-naive for comparison
+                if latest_run.tzinfo is not None:
+                    latest_run = latest_run.replace(tzinfo=None)
                 time_ago = (datetime.now() - latest_run).total_seconds() / 60
-                st.metric("Last Run", f"{int(time_ago)}m ago", delta=None)
+                if time_ago < 0:
+                    # Future timestamp - just show the date
+                    st.metric("Last Run", latest_run.strftime("%b %d"), delta=None)
+                elif time_ago < 60:
+                    st.metric("Last Run", f"{int(time_ago)}m ago", delta=None)
+                elif time_ago < 1440:
+                    st.metric("Last Run", f"{int(time_ago/60)}h ago", delta=None)
+                else:
+                    st.metric("Last Run", f"{int(time_ago/1440)}d ago", delta=None)
             else:
                 st.metric("Last Run", "N/A", delta=None)
+        
+        # Easy-to-understand accuracy section
+        st.divider()
+        st.subheader("How Good Are Your Models?")
+        
+        if 'metrics.test_r2' in runs_df.columns:
+            best_r2_val = runs_df['metrics.test_r2'].max()
+            best_model = runs_df.loc[runs_df['metrics.test_r2'].idxmax(), 'model'] if not runs_df.empty else "N/A"
+            
+            # Convert R² to percentage accuracy (simplified explanation)
+            accuracy_pct = max(0, best_r2_val * 100)
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                # Color based on quality
+                if accuracy_pct >= 70:
+                    st.success(f"**Prediction Accuracy: {accuracy_pct:.1f}%**")
+                    st.caption("Excellent - Model explains most of the variance")
+                elif accuracy_pct >= 40:
+                    st.warning(f"**Prediction Accuracy: {accuracy_pct:.1f}%**")
+                    st.caption("Moderate - Room for improvement")
+                else:
+                    st.error(f"**Prediction Accuracy: {accuracy_pct:.1f}%**")
+                    st.caption("Low - Needs more features or data")
+            
+            with col2:
+                st.info(f"**Best Model: {best_model}**")
+                st.caption("This model performed best on test data")
+            
+            with col3:
+                # Simple interpretation guide
+                st.markdown("""
+                **What does this mean?**
+                - 80%+ = Great predictions
+                - 50-80% = Decent predictions
+                - Below 50% = Needs work
+                """)
     
     def render_performance_chart(self, runs_df):
         """Interactive performance comparison chart (AUTO-UPDATES)."""
@@ -454,6 +504,198 @@ class HockeyDashboard:
                     except Exception as e:
                         st.error(f"Error during feature engineering: {e}")
     
+    def render_advanced_metrics(self, runs_df):
+        """Render comprehensive advanced metrics panel."""
+        st.subheader("Advanced Competition Metrics")
+        
+        if runs_df.empty:
+            st.info("No experiment data available.")
+            return
+        
+        # Collect all available metrics
+        metric_cols = [col for col in runs_df.columns if col.startswith('metrics.')]
+        
+        if not metric_cols:
+            st.warning("No metrics logged yet.")
+            return
+        
+        # Create tabs for different metric categories
+        m_tab1, m_tab2, m_tab3, m_tab4 = st.tabs([
+            "Regression", "Classification", "Model Health", "Competition Score"
+        ])
+        
+        with m_tab1:
+            st.markdown("**Regression Metrics** - For predicting scores/margins")
+            
+            reg_metrics = {
+                'metrics.test_r2': ('R² Score', 'How much variance explained (1.0 = perfect)', True),
+                'metrics.train_r2': ('Train R²', 'Training set R²', True),
+                'metrics.test_rmse': ('RMSE', 'Root Mean Square Error (lower = better)', False),
+                'metrics.test_mae': ('MAE', 'Mean Absolute Error (lower = better)', False),
+                'metrics.test_mape': ('MAPE %', 'Mean Absolute Percentage Error', False),
+                'metrics.explained_variance': ('Explained Var', 'Explained variance score', True),
+            }
+            
+            cols = st.columns(3)
+            col_idx = 0
+            for metric, (name, desc, higher_better) in reg_metrics.items():
+                if metric in runs_df.columns:
+                    with cols[col_idx % 3]:
+                        best_val = runs_df[metric].max() if higher_better else runs_df[metric].min()
+                        st.metric(name, f"{best_val:.4f}")
+                        st.caption(desc)
+                    col_idx += 1
+        
+        with m_tab2:
+            st.markdown("**Classification Metrics** - For predicting win/loss")
+            
+            class_metrics = {
+                'metrics.accuracy': ('Accuracy', 'Correct predictions / Total', True),
+                'metrics.precision': ('Precision', 'True positives / Predicted positives', True),
+                'metrics.recall': ('Recall', 'True positives / Actual positives', True),
+                'metrics.f1': ('F1 Score', 'Harmonic mean of precision & recall', True),
+                'metrics.auc_roc': ('AUC-ROC', 'Area under ROC curve (0.5 = random)', True),
+                'metrics.log_loss': ('Log Loss', 'Cross-entropy loss (lower = better)', False),
+                'metrics.brier_score': ('Brier Score', 'Probability calibration (lower = better)', False),
+            }
+            
+            cols = st.columns(3)
+            col_idx = 0
+            found_any = False
+            for metric, (name, desc, higher_better) in class_metrics.items():
+                if metric in runs_df.columns:
+                    found_any = True
+                    with cols[col_idx % 3]:
+                        best_val = runs_df[metric].max() if higher_better else runs_df[metric].min()
+                        st.metric(name, f"{best_val:.4f}")
+                        st.caption(desc)
+                    col_idx += 1
+            
+            if not found_any:
+                st.info("No classification metrics found. Add accuracy, precision, recall, f1, auc_roc, log_loss to your training scripts.")
+        
+        with m_tab3:
+            st.markdown("**Model Health** - Overfitting & stability checks")
+            
+            # Overfitting analysis
+            if 'metrics.train_r2' in runs_df.columns and 'metrics.test_r2' in runs_df.columns:
+                runs_df['overfit_gap'] = runs_df['metrics.train_r2'] - runs_df['metrics.test_r2']
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    avg_gap = runs_df['overfit_gap'].mean()
+                    if avg_gap > 0.1:
+                        st.error(f"Overfit Gap: {avg_gap:.4f}")
+                        st.caption("High gap = overfitting. Try regularization.")
+                    elif avg_gap > 0.05:
+                        st.warning(f"Overfit Gap: {avg_gap:.4f}")
+                        st.caption("Moderate gap. Monitor closely.")
+                    else:
+                        st.success(f"Overfit Gap: {avg_gap:.4f}")
+                        st.caption("Good! Train/test performance aligned.")
+                
+                with col2:
+                    # Variance in performance
+                    if 'metrics.test_r2' in runs_df.columns:
+                        r2_std = runs_df['metrics.test_r2'].std()
+                        st.metric("R² Std Dev", f"{r2_std:.4f}")
+                        st.caption("Lower = more stable across runs")
+                
+                with col3:
+                    # Best vs average gap
+                    if 'metrics.test_r2' in runs_df.columns:
+                        best_r2 = runs_df['metrics.test_r2'].max()
+                        avg_r2 = runs_df['metrics.test_r2'].mean()
+                        consistency = avg_r2 / best_r2 if best_r2 > 0 else 0
+                        st.metric("Consistency", f"{consistency:.1%}")
+                        st.caption("Avg/Best ratio. Higher = reproducible.")
+            else:
+                st.info("Log both train_r2 and test_r2 to see overfitting analysis.")
+            
+            # Cross-validation stability (if available)
+            cv_metrics = [col for col in runs_df.columns if 'cv_' in col.lower()]
+            if cv_metrics:
+                st.markdown("**Cross-Validation Scores:**")
+                for cv_metric in cv_metrics[:5]:
+                    mean_val = runs_df[cv_metric].mean()
+                    std_val = runs_df[cv_metric].std()
+                    st.write(f"- {cv_metric}: {mean_val:.4f} (+/- {std_val:.4f})")
+        
+        with m_tab4:
+            st.markdown("**Competition Score Estimator**")
+            st.caption("Composite score based on multiple factors")
+            
+            # Calculate composite competition score
+            scores = {}
+            
+            # R² contribution (0-40 points)
+            if 'metrics.test_r2' in runs_df.columns:
+                best_r2 = max(0, runs_df['metrics.test_r2'].max())
+                scores['Prediction Power'] = min(40, best_r2 * 40)
+            
+            # Consistency contribution (0-20 points)
+            if 'metrics.test_r2' in runs_df.columns:
+                r2_std = runs_df['metrics.test_r2'].std()
+                consistency_score = max(0, 20 - (r2_std * 100))
+                scores['Consistency'] = min(20, consistency_score)
+            
+            # Low overfitting contribution (0-20 points)
+            if 'metrics.train_r2' in runs_df.columns and 'metrics.test_r2' in runs_df.columns:
+                overfit = abs(runs_df['metrics.train_r2'].max() - runs_df['metrics.test_r2'].max())
+                overfit_score = max(0, 20 - (overfit * 100))
+                scores['Generalization'] = min(20, overfit_score)
+            
+            # Model diversity (0-10 points)
+            if 'model' in runs_df.columns:
+                diversity = runs_df['model'].nunique()
+                scores['Model Diversity'] = min(10, diversity * 2.5)
+            
+            # Experiment volume (0-10 points)
+            total_runs = len(runs_df)
+            scores['Experiment Volume'] = min(10, total_runs / 100)
+            
+            total_score = sum(scores.values())
+            
+            # Display as progress bars
+            col1, col2 = st.columns([1, 2])
+            
+            with col1:
+                # Big score display
+                if total_score >= 70:
+                    st.success(f"### {total_score:.0f}/100")
+                elif total_score >= 40:
+                    st.warning(f"### {total_score:.0f}/100")
+                else:
+                    st.error(f"### {total_score:.0f}/100")
+                st.caption("Competition Readiness Score")
+            
+            with col2:
+                for component, points in scores.items():
+                    max_points = 40 if component == 'Prediction Power' else 20 if component in ['Consistency', 'Generalization'] else 10
+                    pct = points / max_points
+                    st.progress(pct, text=f"{component}: {points:.1f}/{max_points}")
+            
+            # Recommendations
+            st.markdown("**Recommendations to Improve:**")
+            recs = []
+            if scores.get('Prediction Power', 0) < 30:
+                recs.append("- Add more features (hockey-specific: fatigue, momentum, goalie stats)")
+            if scores.get('Consistency', 0) < 15:
+                recs.append("- Reduce hyperparameter search variance, use more stable ranges")
+            if scores.get('Generalization', 0) < 15:
+                recs.append("- Add regularization (L1/L2), reduce model complexity")
+            if scores.get('Model Diversity', 0) < 7:
+                recs.append("- Try more model types (XGBoost, Neural Net, Ensemble)")
+            if scores.get('Experiment Volume', 0) < 7:
+                recs.append("- Run more experiments to find optimal configurations")
+            
+            if recs:
+                for rec in recs:
+                    st.write(rec)
+            else:
+                st.success("Your pipeline looks competition-ready!")
+    
     def render_sidebar(self):
         """Sidebar with controls and info."""
         with st.sidebar:
@@ -509,9 +751,10 @@ class HockeyDashboard:
         self.render_sidebar()
         
         # Main content
-        tab1, tab2, tab3, tab4 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "Overview",
             "Experiments",
+            "Advanced Metrics",
             "Data",
             "Leaderboard"
         ])
@@ -527,9 +770,12 @@ class HockeyDashboard:
             self.render_hyperparameter_space(runs_df)
         
         with tab3:
-            self.render_data_uploader()
+            self.render_advanced_metrics(runs_df)
         
         with tab4:
+            self.render_data_uploader()
+        
+        with tab5:
             st.subheader("Model Leaderboard")
             if not runs_df.empty and 'metrics.test_r2' in runs_df.columns:
                 # Build column list dynamically

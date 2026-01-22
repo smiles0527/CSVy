@@ -23,7 +23,7 @@ from sklearn.linear_model import Ridge, Lasso, ElasticNet
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from utils.experiment_tracker import ExperimentTracker
+from utils.experiment_tracker import ExperimentTracker, compute_comprehensive_metrics
 
 # Initialize MLflow tracker - use absolute path with file:// URI
 mlruns_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mlruns")
@@ -115,14 +115,17 @@ def evaluate_linear_model(model_type, params, X_train, y_train, X_test, y_test, 
     
     # Fit and predict
     model.fit(X_train_scaled, y_train)
-    predictions = model.predict(X_test_scaled)
+    train_pred = model.predict(X_train_scaled)
+    test_pred = model.predict(X_test_scaled)
     
-    # Calculate metrics
-    metrics = {
-        'rmse': np.sqrt(mean_squared_error(y_test, predictions)),
-        'mae': mean_absolute_error(y_test, predictions),
-        'r2': r2_score(y_test, predictions),
-    }
+    # Calculate comprehensive metrics for competition advantage
+    metrics = compute_comprehensive_metrics(
+        y_true=y_test,
+        y_pred=test_pred,
+        y_train_true=y_train,
+        y_train_pred=train_pred,
+        is_classification=False
+    )
     
     # Log to MLflow
     with tracker.start_run(run_name=run_name or f"{model_type}_{datetime.now().strftime('%H%M%S')}"):

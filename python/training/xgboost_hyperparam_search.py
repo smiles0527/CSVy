@@ -20,7 +20,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.xgboost_model import XGBoostModel
-from utils.experiment_tracker import ExperimentTracker
+from utils.experiment_tracker import ExperimentTracker, compute_comprehensive_metrics
 
 # Initialize MLflow tracker - use absolute path with file:// URI
 mlruns_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "mlruns")
@@ -108,7 +108,19 @@ def evaluate_params(params, X_train, y_train, X_test, y_test, run_name=None):
     """Evaluate a single parameter combination and log to MLflow."""
     model = XGBoostModel(params)
     model.fit(X_train, y_train)
-    metrics = model.evaluate(X_test, y_test)
+    
+    # Get predictions for both train and test
+    train_pred = model.predict(X_train)
+    test_pred = model.predict(X_test)
+    
+    # Compute comprehensive metrics for competition advantage
+    metrics = compute_comprehensive_metrics(
+        y_true=y_test,
+        y_pred=test_pred,
+        y_train_true=y_train,
+        y_train_pred=train_pred,
+        is_classification=False
+    )
     
     # Log to MLflow
     with tracker.start_run(run_name=run_name or f"xgb_{datetime.now().strftime('%H%M%S')}"):

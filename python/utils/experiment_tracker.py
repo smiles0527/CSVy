@@ -528,3 +528,155 @@ def create_tracker(experiment_name: str = "hockey_prediction") -> ExperimentTrac
             "domain": "hockey_prediction"
         }
     )
+
+
+def compute_comprehensive_metrics(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    y_train_true: np.ndarray = None,
+    y_train_pred: np.ndarray = None,
+    is_classification: bool = False,
+    y_prob: np.ndarray = None
+) -> Dict[str, float]:
+    """
+    Compute comprehensive metrics for competition advantage.
+    
+    Parameters
+    ----------
+    y_true : array-like
+        True values (test set).
+    y_pred : array-like
+        Predicted values (test set).
+    y_train_true : array-like, optional
+        True values (training set) for overfitting analysis.
+    y_train_pred : array-like, optional
+        Predicted values (training set) for overfitting analysis.
+    is_classification : bool
+        If True, compute classification metrics.
+    y_prob : array-like, optional
+        Predicted probabilities for classification tasks.
+    
+    Returns
+    -------
+    dict
+        Dictionary of all computed metrics.
+    
+    Example
+    -------
+    >>> metrics = compute_comprehensive_metrics(y_test, predictions)
+    >>> tracker.log_metrics(metrics)
+    """
+    from sklearn.metrics import (
+        r2_score, mean_squared_error, mean_absolute_error,
+        explained_variance_score, max_error,
+        accuracy_score, precision_score, recall_score, f1_score,
+        roc_auc_score, log_loss, brier_score_loss
+    )
+    
+    metrics = {}
+    
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    
+    if is_classification:
+        # Classification metrics
+        metrics['test_accuracy'] = accuracy_score(y_true, y_pred)
+        
+        # Binary classification metrics
+        if len(np.unique(y_true)) == 2:
+            metrics['test_precision'] = precision_score(y_true, y_pred, zero_division=0)
+            metrics['test_recall'] = recall_score(y_true, y_pred, zero_division=0)
+            metrics['test_f1'] = f1_score(y_true, y_pred, zero_division=0)
+            
+            if y_prob is not None:
+                try:
+                    metrics['test_auc_roc'] = roc_auc_score(y_true, y_prob)
+                    metrics['test_log_loss'] = log_loss(y_true, y_prob)
+                    metrics['test_brier_score'] = brier_score_loss(y_true, y_prob)
+                except Exception:
+                    pass
+        else:
+            # Multiclass
+            metrics['test_precision'] = precision_score(y_true, y_pred, average='weighted', zero_division=0)
+            metrics['test_recall'] = recall_score(y_true, y_pred, average='weighted', zero_division=0)
+            metrics['test_f1'] = f1_score(y_true, y_pred, average='weighted', zero_division=0)
+    else:
+        # Regression metrics
+        metrics['test_r2'] = r2_score(y_true, y_pred)
+        metrics['test_rmse'] = np.sqrt(mean_squared_error(y_true, y_pred))
+        metrics['test_mae'] = mean_absolute_error(y_true, y_pred)
+        metrics['test_explained_variance'] = explained_variance_score(y_true, y_pred)
+        metrics['test_max_error'] = max_error(y_true, y_pred)
+        
+        # MAPE (with protection for zero values)
+        non_zero_mask = y_true != 0
+        if non_zero_mask.sum() > 0:
+            metrics['test_mape'] = np.mean(np.abs((y_true[non_zero_mask] - y_pred[non_zero_mask]) / y_true[non_zero_mask])) * 100
+        
+        # Directional accuracy (for time series / predictions)
+        if len(y_true) > 1:
+            direction_true = np.sign(np.diff(y_true))
+            direction_pred = np.sign(np.diff(y_pred))
+            metrics['test_directional_accuracy'] = np.mean(direction_true == direction_pred)
+    
+    # Overfitting analysis (train vs test gap)
+    if y_train_true is not None and y_train_pred is not None:
+        y_train_true = np.asarray(y_train_true)
+        y_train_pred = np.asarray(y_train_pred)
+        
+        if is_classification:
+            metrics['train_accuracy'] = accuracy_score(y_train_true, y_train_pred)
+            metrics['overfit_gap'] = metrics['train_accuracy'] - metrics['test_accuracy']
+        else:
+            metrics['train_r2'] = r2_score(y_train_true, y_train_pred)
+            metrics['train_rmse'] = np.sqrt(mean_squared_error(y_train_true, y_train_pred))
+            metrics['overfit_gap'] = metrics['train_r2'] - metrics['test_r2']
+    
+    # Prediction distribution stats (useful for spotting issues)
+    metrics['pred_mean'] = float(np.mean(y_pred))
+    metrics['pred_std'] = float(np.std(y_pred))
+    metrics['true_mean'] = float(np.mean(y_true))
+    metrics['true_std'] = float(np.std(y_true))
+    
+    return metrics
+
+
+def compute_cross_validation_metrics(
+    model,
+    X: np.ndarray,
+    y: np.ndarray,
+    cv: int = 5,
+    scoring: str = 'r2'
+) -> Dict[str, float]:
+    """
+    Compute cross-validation metrics for stability analysis.
+    
+    Parameters
+    ----------
+    model : sklearn estimator
+        The model to evaluate.
+    X : array-like
+        Features.
+    y : array-like
+        Target.
+    cv : int
+        Number of cross-validation folds.
+    scoring : str
+        Scoring metric ('r2', 'neg_mean_squared_error', 'accuracy', etc.)
+    
+    Returns
+    -------
+    dict
+        Cross-validation scores with mean and std.
+    """
+    from sklearn.model_selection import cross_val_score
+    
+    scores = cross_val_score(model, X, y, cv=cv, scoring=scoring)
+    
+    return {
+        f'cv_{scoring}_mean': float(np.mean(scores)),
+        f'cv_{scoring}_std': float(np.std(scores)),
+        f'cv_{scoring}_min': float(np.min(scores)),
+        f'cv_{scoring}_max': float(np.max(scores)),
+        'cv_consistency': float(1 - (np.std(scores) / (np.mean(scores) + 1e-8)))  # Higher = more consistent
+    }
