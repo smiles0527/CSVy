@@ -1,6 +1,6 @@
 # CSVy - Competitive Hockey Prediction Toolkit
 
-**Ruby-based CSV preprocessing and feature engineering utility
+**Ruby-based CSV preprocessing and feature engineering utility with SHAP explainability & debugging**
 
 
 ### Advanced Feature Engineering (14+ Features)
@@ -40,6 +40,15 @@
 - **Calibration Analysis**: Binned predictions vs actuals
 - **Learning Curves**: Performance vs training size
 
+### 🔍 NEW: Model Explainability & Debugging
+- **SHAP Values**: Explain why models make specific predictions
+- **Feature Importance**: Identify which features drive predictions most
+- **Error Analysis**: Find patterns in prediction mistakes
+- **Feature Quality Debugging**: Detect missing values, outliers, correlations
+- **Systematic Bias Detection**: Identify over/underestimation patterns
+- **Single Prediction Explanations**: Deep dive into individual predictions
+- **Interactive HTML Reports**: Shareable visualizations auto-open in browser
+
 ##  Quick Start 
 
 ```bash
@@ -51,6 +60,12 @@ ruby cli.rb hyperparam-bayesian config/hyperparams/model4_xgboost.yaml --iterati
 
 # 3. Optimize ensemble weights from all models
 ruby cli.rb ensemble-optimize predictions/ --actuals test.csv -o weights.csv
+
+# 4. NEW: Explain model predictions with SHAP
+ruby cli.rb explain-model models/xgboost.pkl data/test.csv
+
+# 5. NEW: Debug prediction errors
+ruby cli.rb debug-errors predictions.csv actuals.csv features.csv
 ```
 
 ```
@@ -171,6 +186,15 @@ ruby cli.rb validate-model final_ensemble_preds.csv \
 | `advanced-features` | Add competition features only | `ruby cli.rb advanced-features data/nhl.csv -o data/advanced.csv` |
 | `diagnose` | Data quality analysis | `ruby cli.rb diagnose data/nhl.csv` |
 | `clean` | Remove duplicates & handle missing | `ruby cli.rb clean data/nhl.csv -o data/clean.csv` |
+
+### 🔍 NEW: Explainability & Debugging
+
+| Command | Purpose | Example |
+|---------|---------|---------|
+| `explain-model` | Generate SHAP explainability report | `ruby cli.rb explain-model models/xgb.pkl data/test.csv` |
+| `explain-prediction` | Explain single prediction | `ruby cli.rb explain-prediction models/xgb.pkl --features GF:250 GA:180` |
+| `debug-errors` | Analyze prediction errors & patterns | `ruby cli.rb debug-errors preds.csv actuals.csv features.csv` |
+| `debug-features` | Check data quality, outliers, correlations | `ruby cli.rb debug-features data/train.csv` |
 
 ### Hyperparameter Optimization
 | Command | Purpose | When to Use |

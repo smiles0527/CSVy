@@ -10,6 +10,11 @@ plotly>=5.15.0
 
 # Notebook
 jupyter>=1.0.0
+shap>=0.44.0
+joblib>=1.3.0
+xgboost>=2.0.0
+lightgbm>=4.1.0
+
 ipywidgets>=8.0.0
 
 # ML Models
