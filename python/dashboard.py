@@ -13,52 +13,41 @@ import mlflow
 from pathlib import Path
 import json
 import time
+import os
 from datetime import datetime
 from scipy import stats as scipy_stats
+
+# Configure MLflow tracking URI (supports Docker or local)
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", None)
 
 # Page config
 st.set_page_config(
     page_title="Hockey ML Pipeline",
-    page_icon="⚡",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Professional CSS styling
+# Professional dark theme CSS
 st.markdown("""
 <style>
-    .reportview-container {
-        background: #0e1117;
+    .stApp {
+        background-color: #0e1117;
     }
-    .metric-card {
-        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-        padding: 20px;
-        border-radius: 10px;
-        color: white;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
+    
     .stMetric {
-        background-color: #1e1e1e;
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 4px solid #3b82f6;
+        background-color: #1a1a2e;
+        padding: 12px;
+        border-radius: 6px;
+        border-left: 3px solid #4f46e5;
     }
-    .big-font {
-        font-size: 24px !important;
-        font-weight: 600;
-        color: #ffffff;
+    
+    h1, h2, h3 {
+        color: #e0e0e0 !important;
     }
-    .status-success {
-        color: #10b981;
-        font-weight: 600;
-    }
-    .status-warning {
-        color: #f59e0b;
-        font-weight: 600;
-    }
-    .status-error {
-        color: #ef4444;
-        font-weight: 600;
+    
+    .stTabs [aria-selected="true"] {
+        color: #4f46e5 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -74,7 +63,11 @@ class HockeyDashboard:
     def load_mlflow_experiments(self):
         """Load all MLflow experiments and runs."""
         try:
-            mlflow.set_tracking_uri("file:///" + str(self.mlflow_path.absolute()))
+            # Use environment variable if set (Docker), otherwise use local path
+            if MLFLOW_TRACKING_URI:
+                mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+            else:
+                mlflow.set_tracking_uri("file:///" + str(self.mlflow_path.absolute()))
             
             # All available experiments
             experiments = {
@@ -2145,14 +2138,30 @@ class HockeyDashboard:
             # Quick actions
             st.subheader("Quick Actions")
             
-            if st.button("▶ Run Hyperparameter Search", use_container_width=True):
+            if st.button("Run Hyperparameter Search", use_container_width=True):
                 st.code("python training/linear_hyperparam_search.py", language="bash")
             
-            if st.button("▶ Train Final Models", use_container_width=True):
+            if st.button("Train Final Models", use_container_width=True):
                 st.code("python training/automated_model_selection.py", language="bash")
             
-            if st.button("▶ Open MLflow UI", use_container_width=True):
-                st.code("mlflow ui --backend-store-uri file:///./mlruns", language="bash")
+            if st.button("Open MLflow UI", use_container_width=True):
+                import subprocess
+                import webbrowser
+                mlruns_path = Path(__file__).parent / "mlruns"
+                if not mlruns_path.exists():
+                    mlruns_path = Path(__file__).parent.parent / "mlruns"
+                try:
+                    subprocess.Popen(
+                        ["mlflow", "ui", "--backend-store-uri", f"file:///{mlruns_path.absolute()}"],
+                        cwd=str(mlruns_path.parent),
+                        creationflags=subprocess.CREATE_NEW_CONSOLE if hasattr(subprocess, 'CREATE_NEW_CONSOLE') else 0
+                    )
+                    time.sleep(2)
+                    webbrowser.open("http://localhost:5000")
+                    st.success("MLflow UI launched at http://localhost:5000")
+                except Exception as e:
+                    st.error(f"Failed to launch MLflow: {e}")
+                    st.code("mlflow ui --backend-store-uri file:///./mlruns", language="bash")
             
             st.divider()
             
@@ -2170,6 +2179,291 @@ class HockeyDashboard:
             **Auto-refresh:** Enable in header to see live updates every 5 seconds.
             """)
     
+    def render_terminal_view(self, runs_df):
+        """Professional trading terminal style multi-panel view."""
+        
+        # Top status bar
+        status_cols = st.columns([1, 1, 1, 1, 1, 1, 1, 1])
+        
+        with status_cols[0]:
+            st.markdown('<div class="panel-header">STATUS</div>', unsafe_allow_html=True)
+            st.markdown('<span class="status-live">LIVE</span>', unsafe_allow_html=True)
+        
+        with status_cols[1]:
+            st.markdown('<div class="panel-header">RUNS</div>', unsafe_allow_html=True)
+            st.markdown(f'<span style="color:#fff;font-family:monospace">{len(runs_df) if not runs_df.empty else 0}</span>', unsafe_allow_html=True)
+        
+        with status_cols[2]:
+            st.markdown('<div class="panel-header">MODELS</div>', unsafe_allow_html=True)
+            n_models = runs_df['model'].nunique() if not runs_df.empty and 'model' in runs_df.columns else 0
+            st.markdown(f'<span style="color:#fff;font-family:monospace">{n_models}</span>', unsafe_allow_html=True)
+        
+        with status_cols[3]:
+            st.markdown('<div class="panel-header">BEST R2</div>', unsafe_allow_html=True)
+            best_r2 = runs_df['metrics.test_r2'].max() if not runs_df.empty and 'metrics.test_r2' in runs_df.columns else 0
+            color = "#00d4aa" if best_r2 > 0.5 else "#ffaa00" if best_r2 > 0.2 else "#ff4444"
+            st.markdown(f'<span style="color:{color};font-family:monospace">{best_r2:.4f}</span>', unsafe_allow_html=True)
+        
+        with status_cols[4]:
+            st.markdown('<div class="panel-header">BEST RMSE</div>', unsafe_allow_html=True)
+            best_rmse = runs_df['metrics.test_rmse'].min() if not runs_df.empty and 'metrics.test_rmse' in runs_df.columns else 0
+            st.markdown(f'<span style="color:#00d4aa;font-family:monospace">{best_rmse:.4f}</span>', unsafe_allow_html=True)
+        
+        with status_cols[5]:
+            st.markdown('<div class="panel-header">AVG R2</div>', unsafe_allow_html=True)
+            avg_r2 = runs_df['metrics.test_r2'].mean() if not runs_df.empty and 'metrics.test_r2' in runs_df.columns else 0
+            st.markdown(f'<span style="color:#888;font-family:monospace">{avg_r2:.4f}</span>', unsafe_allow_html=True)
+        
+        with status_cols[6]:
+            st.markdown('<div class="panel-header">UPDATED</div>', unsafe_allow_html=True)
+            st.markdown(f'<span style="color:#888;font-family:monospace">{datetime.now().strftime("%H:%M:%S")}</span>', unsafe_allow_html=True)
+        
+        with status_cols[7]:
+            if st.button("REFRESH", use_container_width=True):
+                st.rerun()
+        
+        st.markdown("---")
+        
+        # Main chart grid - 2x2 layout like trading terminal
+        col_left, col_right = st.columns([2, 1])
+        
+        with col_left:
+            # Main performance chart
+            self._render_main_chart(runs_df)
+            
+            # Secondary charts row
+            chart_row = st.columns(2)
+            with chart_row[0]:
+                self._render_model_comparison_chart(runs_df)
+            with chart_row[1]:
+                self._render_rmse_chart(runs_df)
+        
+        with col_right:
+            # Leaderboard table
+            self._render_compact_leaderboard(runs_df)
+            
+            # Recent runs
+            self._render_recent_runs(runs_df)
+            
+            # Model stats
+            self._render_model_stats(runs_df)
+    
+    def _render_main_chart(self, runs_df):
+        """Main time series chart like a price chart."""
+        st.markdown('<div class="panel-header">PERFORMANCE OVER TIME</div>', unsafe_allow_html=True)
+        
+        if runs_df.empty or 'start_time' not in runs_df.columns or 'metrics.test_r2' not in runs_df.columns:
+            # Generate sample data if no real data
+            fig = go.Figure()
+            fig.add_annotation(text="No experiment data - run training to see results", 
+                             xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
+                             font=dict(color="#666", size=14))
+            fig.update_layout(
+                template="plotly_dark",
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='#0a0a0a',
+                height=300,
+                margin=dict(l=40, r=20, t=30, b=40)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            return
+        
+        runs_df = runs_df.copy()
+        runs_df['timestamp'] = pd.to_datetime(runs_df['start_time'])
+        runs_df = runs_df.sort_values('timestamp')
+        
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
+                           row_heights=[0.7, 0.3], vertical_spacing=0.02)
+        
+        # Main R2 line (like price)
+        for model in runs_df['model'].unique():
+            model_data = runs_df[runs_df['model'] == model]
+            fig.add_trace(
+                go.Scatter(
+                    x=model_data['timestamp'],
+                    y=model_data['metrics.test_r2'],
+                    mode='lines+markers',
+                    name=model,
+                    line=dict(width=2),
+                    marker=dict(size=4)
+                ),
+                row=1, col=1
+            )
+        
+        # Volume-style bar chart (number of runs per time period)
+        runs_df['date'] = runs_df['timestamp'].dt.date
+        run_counts = runs_df.groupby('date').size().reset_index(name='count')
+        run_counts['date'] = pd.to_datetime(run_counts['date'])
+        
+        fig.add_trace(
+            go.Bar(
+                x=run_counts['date'],
+                y=run_counts['count'],
+                name='Run Count',
+                marker_color='#1a4a6e',
+                showlegend=False
+            ),
+            row=2, col=1
+        )
+        
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='#0a0a0a',
+            height=350,
+            margin=dict(l=40, r=20, t=30, b=40),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
+                       font=dict(size=10)),
+            hovermode='x unified'
+        )
+        
+        fig.update_xaxes(gridcolor='#1a1a2e', zeroline=False)
+        fig.update_yaxes(gridcolor='#1a1a2e', zeroline=False)
+        fig.update_yaxes(title_text="R2", row=1, col=1, title_font=dict(size=10))
+        fig.update_yaxes(title_text="Runs", row=2, col=1, title_font=dict(size=10))
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    def _render_model_comparison_chart(self, runs_df):
+        """Compact model comparison bar chart."""
+        st.markdown('<div class="panel-header">MODEL COMPARISON</div>', unsafe_allow_html=True)
+        
+        if runs_df.empty or 'metrics.test_r2' not in runs_df.columns:
+            fig = go.Figure()
+            fig.add_annotation(text="No data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
+                             font=dict(color="#666", size=12))
+        else:
+            model_stats = runs_df.groupby('model').agg({
+                'metrics.test_r2': ['max', 'mean']
+            }).reset_index()
+            model_stats.columns = ['model', 'max_r2', 'mean_r2']
+            model_stats = model_stats.sort_values('max_r2', ascending=True)
+            
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                y=model_stats['model'],
+                x=model_stats['max_r2'],
+                orientation='h',
+                name='Best',
+                marker_color='#00d4aa'
+            ))
+            
+            fig.add_trace(go.Bar(
+                y=model_stats['model'],
+                x=model_stats['mean_r2'],
+                orientation='h',
+                name='Avg',
+                marker_color='#1a4a6e'
+            ))
+        
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='#0a0a0a',
+            height=200,
+            margin=dict(l=80, r=20, t=10, b=30),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                       font=dict(size=9)),
+            barmode='group',
+            bargap=0.3
+        )
+        fig.update_xaxes(gridcolor='#1a1a2e', zeroline=False, title_text="R2", title_font=dict(size=9))
+        fig.update_yaxes(gridcolor='#1a1a2e', zeroline=False, tickfont=dict(size=9))
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    def _render_rmse_chart(self, runs_df):
+        """RMSE distribution chart."""
+        st.markdown('<div class="panel-header">ERROR DISTRIBUTION</div>', unsafe_allow_html=True)
+        
+        if runs_df.empty or 'metrics.test_rmse' not in runs_df.columns:
+            fig = go.Figure()
+            fig.add_annotation(text="No RMSE data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False,
+                             font=dict(color="#666", size=12))
+        else:
+            rmse_data = runs_df['metrics.test_rmse'].dropna()
+            
+            fig = go.Figure()
+            fig.add_trace(go.Histogram(
+                x=rmse_data,
+                nbinsx=30,
+                marker_color='#ff4444',
+                opacity=0.7
+            ))
+            
+            # Add mean line
+            fig.add_vline(x=rmse_data.mean(), line_dash="dash", line_color="#ffaa00",
+                         annotation_text=f"Mean: {rmse_data.mean():.3f}",
+                         annotation_font_size=9)
+        
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='#0a0a0a',
+            height=200,
+            margin=dict(l=40, r=20, t=10, b=30),
+            showlegend=False
+        )
+        fig.update_xaxes(gridcolor='#1a1a2e', zeroline=False, title_text="RMSE", title_font=dict(size=9))
+        fig.update_yaxes(gridcolor='#1a1a2e', zeroline=False, title_text="Count", title_font=dict(size=9))
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    def _render_compact_leaderboard(self, runs_df):
+        """Compact leaderboard table."""
+        st.markdown('<div class="panel-header">LEADERBOARD</div>', unsafe_allow_html=True)
+        
+        if runs_df.empty or 'metrics.test_r2' not in runs_df.columns:
+            st.markdown('<span style="color:#666">No results yet</span>', unsafe_allow_html=True)
+            return
+        
+        # Top 8 runs
+        top_runs = runs_df.nlargest(8, 'metrics.test_r2')[['model', 'metrics.test_r2']].copy()
+        top_runs.columns = ['Model', 'R2']
+        top_runs['R2'] = top_runs['R2'].apply(lambda x: f"{x:.4f}")
+        top_runs.insert(0, '#', range(1, len(top_runs) + 1))
+        
+        # Display as styled table
+        st.dataframe(top_runs, use_container_width=True, hide_index=True, height=220)
+    
+    def _render_recent_runs(self, runs_df):
+        """Recent experiment runs."""
+        st.markdown('<div class="panel-header">RECENT RUNS</div>', unsafe_allow_html=True)
+        
+        if runs_df.empty or 'start_time' not in runs_df.columns:
+            st.markdown('<span style="color:#666">No runs yet</span>', unsafe_allow_html=True)
+            return
+        
+        runs_df = runs_df.copy()
+        runs_df['time'] = pd.to_datetime(runs_df['start_time']).dt.strftime('%m/%d %H:%M')
+        
+        recent = runs_df.nlargest(5, 'start_time')[['model', 'time']].copy()
+        recent.columns = ['Model', 'Time']
+        
+        st.dataframe(recent, use_container_width=True, hide_index=True, height=150)
+    
+    def _render_model_stats(self, runs_df):
+        """Per-model statistics."""
+        st.markdown('<div class="panel-header">MODEL STATS</div>', unsafe_allow_html=True)
+        
+        if runs_df.empty or 'model' not in runs_df.columns:
+            st.markdown('<span style="color:#666">No stats</span>', unsafe_allow_html=True)
+            return
+        
+        stats = runs_df.groupby('model').agg({
+            'run_id': 'count'
+        }).reset_index()
+        stats.columns = ['Model', 'Runs']
+        
+        if 'metrics.test_r2' in runs_df.columns:
+            r2_stats = runs_df.groupby('model')['metrics.test_r2'].max().reset_index()
+            r2_stats.columns = ['Model', 'Best']
+            stats = stats.merge(r2_stats, on='Model')
+            stats['Best'] = stats['Best'].apply(lambda x: f"{x:.3f}")
+        
+        st.dataframe(stats, use_container_width=True, hide_index=True, height=150)
+
     def run(self):
         """Main dashboard loop."""
         self.render_header()
@@ -2179,6 +2473,8 @@ class HockeyDashboard:
         
         # Render sidebar
         self.render_sidebar()
+        
+        st.markdown("---")
         
         # Main content
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -2212,12 +2508,11 @@ class HockeyDashboard:
         with tab6:
             st.subheader("Model Leaderboard")
             if not runs_df.empty and 'metrics.test_r2' in runs_df.columns:
-                # Build column list dynamically
                 cols_to_show = ['model', 'metrics.test_r2']
                 col_config = {
                     "rank": st.column_config.NumberColumn("Rank", format="%d"),
                     "model": st.column_config.TextColumn("Model"),
-                    "metrics.test_r2": st.column_config.NumberColumn("R²", format="%.4f")
+                    "metrics.test_r2": st.column_config.NumberColumn("R2", format="%.4f")
                 }
                 
                 if 'metrics.test_rmse' in runs_df.columns:

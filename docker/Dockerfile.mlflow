@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install MLflow
+RUN pip install --no-cache-dir mlflow
+
+# Create mlruns directory
+RUN mkdir -p /app/mlruns
+
+# Expose MLflow port
+EXPOSE 5000
+
+# Volume for persistent storage
+VOLUME ["/app/mlruns"]
+
+# Run MLflow server
+ENTRYPOINT ["mlflow", "server", \
+    "--backend-store-uri", "sqlite:///mlflow.db", \
+    "--default-artifact-root", "/app/mlruns", \
+    "--host", "0.0.0.0", \
+    "--port", "5000"]
