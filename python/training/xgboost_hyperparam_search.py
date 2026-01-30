@@ -306,6 +306,11 @@ def main():
     print("SUMMARY")
     print("=" * 60)
     
+    # Create models directory
+    models_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
+                              'output', 'models')
+    os.makedirs(models_dir, exist_ok=True)
+    
     if len(grid_results) > 0:
         best_grid = grid_results.iloc[0]
         print(f"\nBest Grid Search Config:")
@@ -315,6 +320,16 @@ def main():
         print(f"  RMSE: {best_grid['rmse']:.4f}")
         print(f"  MAE: {best_grid['mae']:.4f}")
         print(f"  R²: {best_grid['r2']:.4f}")
+        
+        # Save best grid search model
+        best_grid_params = {k: v for k, v in best_grid.items() 
+                           if k in ['learning_rate', 'n_estimators', 'max_depth', 
+                                   'min_child_weight', 'subsample', 'colsample_bytree']}
+        best_grid_model = XGBoostModel(best_grid_params)
+        best_grid_model.fit(X_train, y_train)
+        grid_model_path = os.path.join(models_dir, 'xgboost_best_grid.json')
+        best_grid_model.save_model(grid_model_path)
+        print(f"  Model saved: {grid_model_path}")
     
     if len(random_results) > 0:
         best_random = random_results.iloc[0]
@@ -325,6 +340,28 @@ def main():
         print(f"  RMSE: {best_random['rmse']:.4f}")
         print(f"  MAE: {best_random['mae']:.4f}")
         print(f"  R²: {best_random['r2']:.4f}")
+        
+        # Save best random search model
+        best_random_params = {k: v for k, v in best_random.items() 
+                             if k in ['learning_rate', 'n_estimators', 'max_depth', 
+                                     'min_child_weight', 'subsample', 'colsample_bytree',
+                                     'gamma', 'reg_alpha', 'reg_lambda']}
+        best_random_model = XGBoostModel(best_random_params)
+        best_random_model.fit(X_train, y_train)
+        random_model_path = os.path.join(models_dir, 'xgboost_best_random.json')
+        best_random_model.save_model(random_model_path)
+        print(f"  Model saved: {random_model_path}")
+    
+    # Save overall best model
+    if len(grid_results) > 0 and len(random_results) > 0:
+        if grid_results.iloc[0]['rmse'] <= random_results.iloc[0]['rmse']:
+            best_overall_path = os.path.join(models_dir, 'xgboost_best.json')
+            best_grid_model.save_model(best_overall_path)
+            print(f"\nOverall best model (grid): {best_overall_path}")
+        else:
+            best_overall_path = os.path.join(models_dir, 'xgboost_best.json')
+            best_random_model.save_model(best_overall_path)
+            print(f"\nOverall best model (random): {best_overall_path}")
     
     print(f"\nCompleted: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
