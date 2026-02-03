@@ -1,0 +1,17 @@
+game,game_id,home_team,away_team,pred_home_goals,pred_away_goals,pred_winner,pred_goal_diff
+1,game_1,brazil,kazakhstan,3.24,2.39,brazil,0.85
+2,game_2,netherlands,mongolia,3.46,2.28,netherlands,1.18
+3,game_3,peru,rwanda,3.41,2.24,peru,1.17
+4,game_4,thailand,oman,3.59,2.73,thailand,0.86
+5,game_5,pakistan,germany,3.35,2.74,pakistan,0.62
+6,game_6,india,usa,3.06,2.44,india,0.62
+7,game_7,panama,switzerland,3.34,2.36,panama,0.99
+8,game_8,iceland,canada,3.38,2.62,iceland,0.76
+9,game_9,china,france,3.51,2.71,china,0.8
+10,game_10,philippines,morocco,3.11,2.27,philippines,0.84
+11,game_11,ethiopia,saudi_arabia,2.95,2.66,ethiopia,0.29
+12,game_12,singapore,new_zealand,3.14,2.89,singapore,0.25
+13,game_13,guatemala,south_korea,3.17,2.77,guatemala,0.4
+14,game_14,uk,mexico,3.34,2.72,uk,0.63
+15,game_15,vietnam,serbia,3.08,2.82,vietnam,0.26
+16,game_16,indonesia,uae,3.05,2.48,indonesia,0.57
