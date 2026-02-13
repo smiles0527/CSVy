@@ -72,7 +72,7 @@ Tested all 6 baseline strategies on WHL data (80/20 train/test split).
 | **Poisson** | ~~1.926~~ | ~~1.700~~ | ~~1.811~~ | ~~55.4%~~ |
 
 ~~Poisson baseline selected as reference benchmark (1.811 combined RMSE).~~
-See Phase 8 for correct numbers — Bayesian(35) is the best single baseline (1.809 combined RMSE).
+See Phase 8 for correct numbers — Bayesian(50) is the best single baseline (1.8092 combined RMSE).
 
 ---
 
@@ -271,15 +271,23 @@ Also added `predict_winner()` method to the base class for consistent winner/con
 
 | Model | Home RMSE | Away RMSE | Combined RMSE | Win Acc |
 |-------|-----------|-----------|---------------|---------|
-| **BayesianTeam(10)** | 1.9073 | 1.7122 | **1.8124** | 56.7% |
-| **DixonColes(1.0)** | 1.8886 | 1.7333 | **1.8126** | 56.3% |
-| BayesianTeam(5) | 1.9087 | 1.7161 | 1.8150 | 55.1% |
-| BayesianTeam(3) | 1.9095 | 1.7181 | 1.8163 | 55.1% |
+| **Bayesian(50)** | 1.9106 | 1.7018 | **1.8092** | 56.3% |
+| Bayesian(20) | 1.9066 | 1.7070 | 1.8096 | 56.3% |
+| Bayesian(10) | 1.9073 | 1.7122 | 1.8124 | 56.7% |
+| DixonColes(1.0) | 1.8886 | 1.7333 | 1.8126 | 56.3% |
+| Bayesian(5) | 1.9087 | 1.7161 | 1.8150 | 55.1% |
 | HomeAway | 1.9434 | 1.6978 | 1.8247 | 55.5% |
-| Poisson | 1.9091 | 1.7401 | 1.8266 | 54.8% |
+| Poisson | 1.9091 | 1.7401 | 1.8267 | 54.8% |
 | TeamMean | 1.9565 | 1.7102 | 1.8374 | 55.1% |
 | WeightedHist(0.99) | 1.9580 | 1.7112 | 1.8388 | 56.3% |
 | GlobalMean | 1.9588 | 1.7231 | 1.8448 | **61.2%** |
+| WeightedHist(0.95) | 1.9638 | 1.7233 | 1.8475 | 51.7% |
+| MovingAvg(20) | 1.9576 | 1.7337 | 1.8491 | 52.5% |
+| WeightedHist(0.9) | 1.9751 | 1.7472 | 1.8646 | 48.3% |
+| MovingAvg(10) | 1.9946 | 1.8136 | 1.9063 | 47.1% |
+| MovingAvg(5) | 2.0428 | 1.8380 | 1.9431 | 49.4% |
+| DixonColes(0.99) | 2.0333 | 1.8572 | 1.9472 | 49.8% |
+| DixonColes(0.95) | 2.6503 | 2.4506 | 2.5524 | 47.9% |
 
 ### Hyperparameter Tuning
 
@@ -301,24 +309,24 @@ All 16 games predicted home team wins (consistent with 56.4% home win rate).
 
 | Game | Home | Away | Pred Home | Pred Away | Winner | Conf |
 |------|------|------|-----------|-----------|--------|------|
-| 1 | Brazil | Kazakhstan | 3.73 | 1.85 | Brazil | 66.8% |
-| 2 | Netherlands | Mongolia | 3.32 | 1.62 | Netherlands | 67.2% |
-| 3 | Peru | Rwanda | 3.65 | 1.86 | Peru | 66.3% |
-| 4 | Thailand | Oman | 4.42 | 2.83 | Thailand | 60.9% |
-| 5 | Pakistan | Germany | 3.81 | 2.46 | Pakistan | 60.7% |
-| 6 | India | USA | 3.57 | 2.29 | India | 61.0% |
-| 7 | Panama | Switzerland | 3.34 | 2.12 | Panama | 61.2% |
-| 8 | Iceland | Canada | 3.53 | 2.27 | Iceland | 60.8% |
-| 9 | China | France | 3.48 | 2.27 | China | 60.5% |
-| 10 | Philippines | Morocco | 3.08 | 2.24 | Philippines | 57.9% |
-| 11 | Ethiopia | Saudi Arabia | 3.09 | 2.33 | Ethiopia | 56.9% |
+| 1 | Brazil | Kazakhstan | 3.71 | 1.88 | Brazil | 66.4% |
+| 2 | Netherlands | Mongolia | 3.31 | 1.65 | Netherlands | 66.8% |
+| 3 | Peru | Rwanda | 3.63 | 1.88 | Peru | 65.9% |
+| 4 | Thailand | Oman | 4.38 | 2.83 | Thailand | 60.7% |
+| 5 | Pakistan | Germany | 3.79 | 2.47 | Pakistan | 60.5% |
+| 6 | India | USA | 3.56 | 2.30 | India | 60.8% |
+| 7 | Panama | Switzerland | 3.34 | 2.13 | Panama | 61.0% |
+| 8 | Iceland | Canada | 3.52 | 2.29 | Iceland | 60.7% |
+| 9 | China | France | 3.47 | 2.29 | China | 60.3% |
+| 10 | Philippines | Morocco | 3.08 | 2.25 | Philippines | 57.8% |
+| 11 | Ethiopia | Saudi Arabia | 3.09 | 2.35 | Ethiopia | 56.9% |
 | 12 | Singapore | New Zealand | 3.28 | 2.82 | Singapore | 53.8% |
-| 13 | Guatemala | South Korea | 3.80 | 3.08 | Guatemala | 55.2% |
-| 14 | UK | Mexico | 3.48 | 2.46 | UK | 58.6% |
-| 15 | Vietnam | Serbia | 3.32 | 3.16 | Vietnam | 51.2% |
-| 16 | Indonesia | UAE | 3.12 | 2.15 | Indonesia | 59.2% |
+| 13 | Guatemala | South Korea | 3.78 | 3.07 | Guatemala | 55.2% |
+| 14 | UK | Mexico | 3.47 | 2.47 | UK | 58.5% |
+| 15 | Vietnam | Serbia | 3.32 | 3.15 | Vietnam | 51.3% |
+| 16 | Indonesia | UAE | 3.12 | 2.16 | Indonesia | 59.0% |
 
-Avg confidence: 59.9%
+Avg confidence: 59.3%
 
 ---
 
@@ -326,4 +334,4 @@ Avg confidence: 59.9%
 
 1. Run competition pipeline with Elo + XGBoost + engineered features
 2. Compare ML model predictions against baseline predictions
-3. Quantify improvement over baseline (target: beat 1.8078 RMSE, 55.5% win acc)
+3. Quantify improvement over baseline (target: beat 1.8071 ensemble RMSE, 55.9% win acc)
