@@ -59,16 +59,20 @@ Audited every RMSE calculation across 18 Python files (~35 call sites).
 
 Tested all 6 baseline strategies on WHL data (80/20 train/test split).
 
+> **Note:** Phase 2 numbers below used `first()` aggregation (per-shift values) and are **superseded** by Phase 8.
+> Correct results with `sum()` aggregation (game-level totals) are in Phase 8.
+
 | Model | Home RMSE | Away RMSE | Combined RMSE | Win Accuracy |
 |-------|-----------|-----------|---------------|--------------|
-| GlobalMean | 2.149 | 1.896 | 2.029 | 56.4% |
-| TeamMean | 2.014 | 1.843 | 1.931 | 54.0% |
-| HomeAway | 2.030 | 1.878 | 1.956 | 56.4% |
-| MovingAverage | 2.087 | 1.893 | 1.993 | 53.2% |
-| WeightedHistory | 2.080 | 1.861 | 1.974 | 53.2% |
-| **Poisson** | **1.926** | **1.700** | **1.811** | **55.4%** |
+| GlobalMean | ~~2.149~~ | ~~1.896~~ | ~~2.029~~ | ~~56.4%~~ |
+| TeamMean | ~~2.014~~ | ~~1.843~~ | ~~1.931~~ | ~~54.0%~~ |
+| HomeAway | ~~2.030~~ | ~~1.878~~ | ~~1.956~~ | ~~56.4%~~ |
+| MovingAverage | ~~2.087~~ | ~~1.893~~ | ~~1.993~~ | ~~53.2%~~ |
+| WeightedHistory | ~~2.080~~ | ~~1.861~~ | ~~1.974~~ | ~~53.2%~~ |
+| **Poisson** | ~~1.926~~ | ~~1.700~~ | ~~1.811~~ | ~~55.4%~~ |
 
-Poisson baseline selected as reference benchmark (1.811 combined RMSE).
+~~Poisson baseline selected as reference benchmark (1.811 combined RMSE).~~
+See Phase 8 for correct numbers — Bayesian(35) is the best single baseline (1.809 combined RMSE).
 
 ---
 
@@ -282,15 +286,14 @@ Also added `predict_winner()` method to the base class for consistent winner/con
 | Parameter | Search Range | Best Value | RMSE |
 |-----------|-------------|------------|------|
 | Dixon-Coles decay | 0.90–1.00 | 1.0 (no decay) | 1.8126 |
-| Bayesian prior_weight | 1–20 | 20 | 1.8096 |
+| Bayesian prior_weight | 1–100 | 35 | 1.8085 |
 
 ### Ensemble Baseline (Best Overall)
 
-Blends HomeAway + Poisson + DixonColes + BayesianTeam with inverse-RMSE weights.
+Blends HomeAway + Poisson + DixonColes(1.0) + BayesianTeam(35) with inverse-RMSE weights.
 
-- **Combined RMSE: 1.8078** (best of all baselines)
-- **Win Accuracy: 55.5%**
-- Weights: ~0.25 each (sub-models are close in quality)
+- **Combined RMSE: 1.8071** (best of all baselines)
+- **Win Accuracy: 55.9%**
 
 ### Round 1 Baseline Predictions
 
