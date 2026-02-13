@@ -522,7 +522,10 @@ class LinearRegressionModel:
         scoring: str = 'neg_root_mean_squared_error'
     ) -> Dict[str, Any]:
         """
-        Perform k-fold cross-validation.
+        Perform k-fold cross-validation with proper scaling per fold (no data leakage).
+        
+        Uses a Pipeline so the scaler and polynomial transformer are fit only
+        on each training fold, not on the full dataset.
         
         Parameters
         ----------
@@ -540,14 +543,32 @@ class LinearRegressionModel:
         dict
             Cross-validation results with mean, std, and fold scores
         """
-        X_prep = self._prepare_features(X, fit=True)
+        # Extract numpy but do NOT fit scaler on full data
+        if isinstance(X, pd.DataFrame):
+            if self.feature_names is None:
+                self.feature_names = list(X.columns)
+            X_arr = X.values
+        else:
+            X_arr = np.asarray(X)
+        X_arr = np.nan_to_num(X_arr.astype(np.float64), nan=0.0)
         y_prep = np.asarray(y).ravel()
         
-        # Create fresh model for CV
-        cv_model = self._create_model()
+        # Build pipeline with per-fold fitting (no leakage)
+        steps = []
+        if self.poly is not None:
+            steps.append(('poly', PolynomialFeatures(
+                degree=self.poly.degree,
+                interaction_only=self.poly.interaction_only,
+                include_bias=self.poly.include_bias
+            )))
+        if self.scaler is not None:
+            scaler_class = type(self.scaler)
+            steps.append(('scaler', scaler_class()))
+        steps.append(('model', self._create_model()))
+        cv_pipeline = Pipeline(steps)
         
         kfold = KFold(n_splits=cv, shuffle=True, random_state=42)
-        scores = cross_val_score(cv_model, X_prep, y_prep, cv=kfold, scoring=scoring)
+        scores = cross_val_score(cv_pipeline, X_arr, y_prep, cv=kfold, scoring=scoring)
         
         # Convert negative scores if needed
         if scoring.startswith('neg_'):

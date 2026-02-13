@@ -194,11 +194,15 @@ class XGBoostModel:
             X_val_prep = self._prepare_features(X_val, fit_scaler=False)
             y_val_prep = np.array(y_val).ravel()
             
-            self.model.fit(
-                X_train, y_train,
-                eval_set=[(X_train, y_train), (X_val_prep, y_val_prep)],
-                verbose=verbose
-            )
+            # Pass early_stopping_rounds so training actually stops early
+            fit_kwargs = {
+                'eval_set': [(X_train, y_train), (X_val_prep, y_val_prep)],
+                'verbose': verbose,
+            }
+            if early_stopping_rounds and early_stopping_rounds > 0:
+                fit_kwargs['early_stopping_rounds'] = early_stopping_rounds
+            
+            self.model.fit(X_train, y_train, **fit_kwargs)
             
             # Store training history
             self.training_history = self.model.evals_result()
@@ -265,7 +269,10 @@ class XGBoostModel:
     
     def cross_validate(self, X, y, cv=5, scoring='neg_root_mean_squared_error'):
         """
-        Perform cross-validation.
+        Perform cross-validation with proper scaling per fold (no data leakage).
+        
+        Uses a Pipeline(scaler, model) so the scaler is fit only on each
+        training fold, not on the full dataset.
         
         Parameters
         ----------
@@ -283,21 +290,32 @@ class XGBoostModel:
         dict
             Cross-validation results with mean and std
         """
-        X_prep = self._prepare_features(X, fit_scaler=True)
+        from sklearn.pipeline import Pipeline
+        
+        # Extract numpy but do NOT fit the scaler on all data
+        if isinstance(X, pd.DataFrame):
+            self.feature_names = list(X.columns)
+            X_arr = X.values
+        else:
+            X_arr = np.array(X)
         y_prep = np.array(y).ravel()
         
-        # Create fresh model for CV
-        cv_model = xgb.XGBRegressor(**self.params)
+        # Build a pipeline so scaler fits per-fold (no leakage)
+        steps = []
+        if self.use_scaler:
+            steps.append(('scaler', StandardScaler()))
+        steps.append(('model', xgb.XGBRegressor(**self.params)))
+        cv_pipeline = Pipeline(steps)
         
-        scores = cross_val_score(cv_model, X_prep, y_prep, cv=cv, scoring=scoring)
+        scores = cross_val_score(cv_pipeline, X_arr, y_prep, cv=cv, scoring=scoring)
         
         # Negate scores if using neg_ metrics
         if scoring.startswith('neg_'):
             scores = -scores
         
         return {
-            'mean': scores.mean(),
-            'std': scores.std(),
+            'mean': float(scores.mean()),
+            'std': float(scores.std()),
             'scores': scores.tolist(),
             'cv_folds': cv
         }
@@ -381,24 +399,50 @@ class XGBoostModel:
     
     def save_model(self, filepath):
         """
-        Save the trained model to disk.
+        Save the full model state to disk (model + scaler + feature names + params).
         
         Parameters
         ----------
         filepath : str or Path
-            Path to save the model
+            Path to save the model (uses pickle)
         """
+        import pickle
+        
         if not self.is_fitted:
             raise RuntimeError("Model must be fitted before saving")
         
         filepath = Path(filepath)
+        if not str(filepath).endswith('.pkl'):
+            filepath = Path(str(filepath) + '.pkl')
         filepath.parent.mkdir(parents=True, exist_ok=True)
         
-        self.model.save_model(str(filepath))
+        state = {
+            'params': self.params,
+            'scaler': self.scaler,
+            'feature_names': self.feature_names,
+            'feature_importances_': getattr(self, 'feature_importances_', None),
+            'training_history': getattr(self, 'training_history', None),
+            'use_scaler': self.use_scaler,
+            'is_fitted': True,
+        }
+        
+        # Save XGBoost model separately then bundle
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
+            self.model.save_model(tmp.name)
+            with open(tmp.name, 'r') as f:
+                state['xgb_model_json'] = f.read()
+            os.unlink(tmp.name)
+        
+        with open(filepath, 'wb') as f:
+            pickle.dump(state, f)
+        
+        print(f"XGBoost model saved to {filepath} ({len(self.feature_names or [])} features)")
+        return str(filepath)
     
     def load_model(self, filepath):
         """
-        Load a trained model from disk.
+        Load a full model state from disk.
         
         Parameters
         ----------
@@ -409,14 +453,35 @@ class XGBoostModel:
         -------
         self
         """
-        filepath = Path(filepath)
-        if not filepath.exists():
-            raise FileNotFoundError(f"Model file not found: {filepath}")
+        import pickle
         
-        self.model = xgb.XGBRegressor()
-        self.model.load_model(str(filepath))
+        filepath = Path(filepath)
+        if not filepath.exists() and not Path(str(filepath) + '.pkl').exists():
+            raise FileNotFoundError(f"Model file not found: {filepath}")
+        if not filepath.exists():
+            filepath = Path(str(filepath) + '.pkl')
+        
+        with open(filepath, 'rb') as f:
+            state = pickle.load(f)
+        
+        self.params = state.get('params', self.params)
+        self.scaler = state.get('scaler', self.scaler)
+        self.feature_names = state.get('feature_names', None)
+        self.feature_importances_ = state.get('feature_importances_', None)
+        self.training_history = state.get('training_history', None)
+        self.use_scaler = state.get('use_scaler', False)
         self.is_fitted = True
         
+        # Restore XGBoost model from JSON
+        import tempfile, os
+        self.model = xgb.XGBRegressor(**self.params)
+        with tempfile.NamedTemporaryFile(suffix='.json', mode='w', delete=False) as tmp:
+            tmp.write(state['xgb_model_json'])
+            tmp.flush()
+            self.model.load_model(tmp.name)
+        os.unlink(tmp.name)
+        
+        print(f"XGBoost model loaded ({len(self.feature_names or [])} features)")
         return self
     
     def get_params(self):

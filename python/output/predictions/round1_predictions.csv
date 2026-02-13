@@ -1,4 +1,4 @@
-game,game_id,home_team,away_team,pred_home_goals,pred_away_goals,pred_winner,pred_goal_diff
+    game,game_id,home_team,away_team,pred_home_goals,pred_away_goals,pred_winner,pred_goal_diff
 1,game_1,brazil,kazakhstan,3.24,2.39,brazil,0.85
 2,game_2,netherlands,mongolia,3.46,2.28,netherlands,1.18
 3,game_3,peru,rwanda,3.41,2.24,peru,1.17

@@ -14,17 +14,15 @@ Usage:
 
 import pandas as pd
 import numpy as np
-from sklearn.metrics import mean_absolute_error, r2_score
+import pickle
+import json
+import os
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-# Handle scikit-learn version compatibility for RMSE
-try:
-    from sklearn.metrics import root_mean_squared_error
-    def rmse_score(y_true, y_pred):
-        return root_mean_squared_error(y_true, y_pred)
-except ImportError:
-    from sklearn.metrics import mean_squared_error
-    def rmse_score(y_true, y_pred):
-        return mean_squared_error(y_true, y_pred, squared=False)
+
+def rmse_score(y_true, y_pred):
+    """Compute RMSE using the universally correct np.sqrt(MSE) pattern."""
+    return float(np.sqrt(mean_squared_error(y_true, y_pred)))
 
 
 # Column name mappings - checks these alternatives in order
@@ -106,7 +104,15 @@ class EloModel:
         self.rating_history = []
     
     def initialize_ratings(self, teams, divisions=None):
-        """Initialize team ratings based on division tier."""
+        """Initialize team ratings based on division tier.
+        
+        Parameters
+        ----------
+        teams : array-like
+            List of team names.
+        divisions : dict-like or Series, optional
+            Maps team name → division string (e.g., 'D1', 'D2', 'D3').
+        """
         initial = self.params.get('initial_rating', 1500)
         division_ratings = {
             'D1': initial + 100,
@@ -114,9 +120,9 @@ class EloModel:
             'D3': initial - 100
         }
         
-        for i, team in enumerate(teams):
-            if divisions is not None and i < len(divisions):
-                div = divisions.iloc[i] if hasattr(divisions, 'iloc') else divisions[i]
+        for team in teams:
+            if divisions is not None and team in divisions:
+                div = divisions[team] if not hasattr(divisions, 'get') else divisions.get(team)
                 self.ratings[team] = division_ratings.get(div, initial)
             else:
                 self.ratings[team] = initial
@@ -330,20 +336,47 @@ class EloModel:
             self.update_ratings(game)
     
     def evaluate(self, games_df):
-        """Evaluate model on test set."""
-        predictions = []
-        actuals = []
+        """Evaluate model on test set with comprehensive metrics.
+        
+        Returns dict with:
+            home_rmse, away_rmse, combined_rmse, home_mae, away_mae,
+            home_r2, away_r2, win_accuracy, n_games
+        """
+        home_preds, away_preds = [], []
+        home_actuals, away_actuals = [], []
+        correct_wins = 0
         
         for _, game in games_df.iterrows():
-            home_pred, _ = self.predict_goals(game)
-            predictions.append(home_pred)
-            actuals.append(get_value(game, 'home_goals', 0))
+            h_pred, a_pred = self.predict_goals(game)
+            h_actual = get_value(game, 'home_goals', 0)
+            a_actual = get_value(game, 'away_goals', 0)
+            
+            home_preds.append(h_pred)
+            away_preds.append(a_pred)
+            home_actuals.append(h_actual)
+            away_actuals.append(a_actual)
+            
+            # Win accuracy
+            pred_home_win = h_pred > a_pred
+            actual_home_win = h_actual > a_actual
+            if pred_home_win == actual_home_win:
+                correct_wins += 1
         
-        rmse = rmse_score(actuals, predictions)
-        mae = mean_absolute_error(actuals, predictions)
-        r2 = r2_score(actuals, predictions) if len(set(actuals)) > 1 else 0.0
+        n = len(home_actuals)
+        all_actuals = home_actuals + away_actuals
+        all_preds = home_preds + away_preds
         
-        return {'rmse': rmse, 'mae': mae, 'r2': r2}
+        return {
+            'home_rmse': rmse_score(home_actuals, home_preds),
+            'away_rmse': rmse_score(away_actuals, away_preds),
+            'combined_rmse': rmse_score(all_actuals, all_preds),
+            'home_mae': float(mean_absolute_error(home_actuals, home_preds)),
+            'away_mae': float(mean_absolute_error(away_actuals, away_preds)),
+            'home_r2': float(r2_score(home_actuals, home_preds)) if len(set(home_actuals)) > 1 else 0.0,
+            'away_r2': float(r2_score(away_actuals, away_preds)) if len(set(away_actuals)) > 1 else 0.0,
+            'win_accuracy': correct_wins / n if n > 0 else 0.0,
+            'n_games': n,
+        }
     
     def get_rankings(self, top_n=None):
         """Get team rankings sorted by ELO rating."""
@@ -355,3 +388,55 @@ class EloModel:
     def get_rating_history_df(self):
         """Get rating history as a DataFrame."""
         return pd.DataFrame(self.rating_history)
+    
+    # ── Save / Load ──────────────────────────────────────────────
+    
+    def save_model(self, path):
+        """Save model state (ratings, params, history) to disk.
+        
+        Saves two files:
+            {path}.pkl  – full pickle (ratings + history + params)
+            {path}.json – human-readable params + final ratings
+        """
+        os.makedirs(os.path.dirname(path) if os.path.dirname(path) else '.', exist_ok=True)
+        
+        state = {
+            'params': self.params,
+            'ratings': self.ratings,
+            'rating_history': self.rating_history,
+        }
+        
+        # Pickle for exact restoration
+        pkl_path = path if path.endswith('.pkl') else path + '.pkl'
+        with open(pkl_path, 'wb') as f:
+            pickle.dump(state, f)
+        
+        # JSON for human readability
+        json_path = path.replace('.pkl', '') + '.json' if path.endswith('.pkl') else path + '.json'
+        json_state = {
+            'params': {k: (float(v) if isinstance(v, (np.floating, float)) else v)
+                       for k, v in self.params.items()},
+            'ratings': {k: float(v) for k, v in self.ratings.items()},
+            'n_games_trained': len(self.rating_history),
+        }
+        with open(json_path, 'w') as f:
+            json.dump(json_state, f, indent=2)
+        
+        print(f"Elo model saved to {pkl_path} ({len(self.ratings)} teams, {len(self.rating_history)} games)")
+        return pkl_path
+    
+    @classmethod
+    def load_model(cls, path):
+        """Load a saved Elo model from disk.
+        
+        Returns a fully restored EloModel instance.
+        """
+        pkl_path = path if path.endswith('.pkl') else path + '.pkl'
+        with open(pkl_path, 'rb') as f:
+            state = pickle.load(f)
+        
+        model = cls(state['params'])
+        model.ratings = state['ratings']
+        model.rating_history = state['rating_history']
+        print(f"Elo model loaded: {len(model.ratings)} teams, {len(model.rating_history)} games")
+        return model

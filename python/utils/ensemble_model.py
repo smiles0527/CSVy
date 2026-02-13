@@ -175,17 +175,15 @@ class EnsembleModel(BaseEstimator, RegressorMixin):
         if len(self.models) == 0:
             raise ValueError("No models in ensemble. Use add_model() first.")
         
-        # Convert to numpy
-        if isinstance(X, pd.DataFrame):
-            X = X.values
+        # Preserve DataFrames for sub-models that need feature names
+        # Only convert y to numpy (targets don't need column names)
         if isinstance(y, pd.Series):
             y = y.values
-        if isinstance(X_val, pd.DataFrame):
-            X_val = X_val.values
         if isinstance(y_val, pd.Series):
             y_val = y_val.values
         
-        # Fit each model
+        # Fit each model — pass X as-is (DataFrame or numpy)
+        # Sub-models handle their own conversion internally
         for i, model in enumerate(self.models):
             if not hasattr(model, 'fit'):
                 raise ValueError(f"Model {i} does not have a fit() method")
@@ -251,9 +249,7 @@ class EnsembleModel(BaseEstimator, RegressorMixin):
         if not self.is_fitted:
             raise ValueError("Ensemble not fitted. Call fit() first.")
         
-        if isinstance(X, pd.DataFrame):
-            X = X.values
-        
+        # Pass X as-is — sub-models handle their own conversion
         # Get predictions from each model
         predictions = np.column_stack([
             model.predict(X) for model in self.models

@@ -19,6 +19,10 @@ Usage:
     metrics = model.evaluate(test_df)
 """
 
+import json
+import pickle
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -96,6 +100,29 @@ class BaselineModel:
             (home_goals_pred, away_goals_pred)
         """
         raise NotImplementedError("Subclasses must implement predict_goals()")
+
+    def predict_winner(self, game):
+        """
+        Predict the winner and confidence.
+
+        Returns
+        -------
+        tuple
+            (winner_team_name, win_probability)
+        """
+        home_goals, away_goals = self.predict_goals(game)
+        home_team = get_value(game, 'home_team')
+        away_team = get_value(game, 'away_team')
+
+        total = home_goals + away_goals
+        if total == 0:
+            return home_team, 0.5
+
+        home_prob = home_goals / total
+        if home_goals >= away_goals:
+            return home_team, home_prob
+        else:
+            return away_team, 1 - home_prob
     
     def evaluate(self, games_df):
         """
@@ -127,27 +154,113 @@ class BaselineModel:
             away_actuals.append(get_value(game, 'away_goals', 0))
         
         # Calculate metrics for home goals
-        rmse = mean_squared_error(home_actuals, home_preds, squared=False)
-        mae = mean_absolute_error(home_actuals, home_preds)
-        r2 = r2_score(home_actuals, home_preds) if len(set(home_actuals)) > 1 else 0.0
+        home_rmse = np.sqrt(mean_squared_error(home_actuals, home_preds))
+        home_mae = mean_absolute_error(home_actuals, home_preds)
+        home_r2 = r2_score(home_actuals, home_preds) if len(set(home_actuals)) > 1 else 0.0
         
-        # Also calculate combined metrics (both home and away)
+        # Calculate metrics for away goals
+        away_rmse = np.sqrt(mean_squared_error(away_actuals, away_preds))
+        away_mae = mean_absolute_error(away_actuals, away_preds)
+        away_r2 = r2_score(away_actuals, away_preds) if len(set(away_actuals)) > 1 else 0.0
+        
+        # Combined metrics (both home and away)
         all_preds = home_preds + away_preds
         all_actuals = home_actuals + away_actuals
-        combined_rmse = mean_squared_error(all_actuals, all_preds, squared=False)
+        combined_rmse = np.sqrt(mean_squared_error(all_actuals, all_preds))
         combined_mae = mean_absolute_error(all_actuals, all_preds)
+        combined_r2 = r2_score(all_actuals, all_preds) if len(set(all_actuals)) > 1 else 0.0
+        
+        # Win prediction accuracy
+        correct_wins = sum(
+            1 for hp, ap, ha, aa in zip(home_preds, away_preds, home_actuals, away_actuals)
+            if (hp > ap) == (ha > aa)
+        )
+        win_accuracy = correct_wins / len(home_preds) if home_preds else 0.0
         
         return {
-            'rmse': rmse,
-            'mae': mae,
-            'r2': r2,
+            'rmse': home_rmse,
+            'mae': home_mae,
+            'r2': home_r2,
+            'away_rmse': away_rmse,
+            'away_mae': away_mae,
+            'away_r2': away_r2,
             'combined_rmse': combined_rmse,
-            'combined_mae': combined_mae
+            'combined_mae': combined_mae,
+            'combined_r2': combined_r2,
+            'win_accuracy': win_accuracy,
         }
     
     def get_summary(self):
         """Get model summary statistics."""
         raise NotImplementedError("Subclasses must implement get_summary()")
+    
+    def save_model(self, filepath):
+        """
+        Save model state to disk.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to save file (.pkl)
+        """
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        
+        state = {
+            'class': self.__class__.__name__,
+            'params': self.params,
+            'is_fitted': self.is_fitted,
+        }
+        # Save all instance attributes (team dicts, means, etc.)
+        for key, value in self.__dict__.items():
+            if key not in state:
+                state[key] = value
+        
+        with open(filepath, 'wb') as f:
+            pickle.dump(state, f)
+    
+    @classmethod
+    def load_model(cls, filepath):
+        """
+        Load model state from disk.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to saved model (.pkl)
+        
+        Returns
+        -------
+        BaselineModel
+            Restored model instance
+        """
+        filepath = Path(filepath)
+        if not filepath.exists():
+            raise FileNotFoundError(f"Model file not found: {filepath}")
+        
+        with open(filepath, 'rb') as f:
+            state = pickle.load(f)
+        
+        # Look up the correct subclass
+        class_name = state.pop('class', cls.__name__)
+        class_map = {
+            'GlobalMeanBaseline': GlobalMeanBaseline,
+            'TeamMeanBaseline': TeamMeanBaseline,
+            'HomeAwayBaseline': HomeAwayBaseline,
+            'MovingAverageBaseline': MovingAverageBaseline,
+            'WeightedHistoryBaseline': WeightedHistoryBaseline,
+            'PoissonBaseline': PoissonBaseline,
+            'DixonColesBaseline': DixonColesBaseline,
+            'BayesianTeamBaseline': BayesianTeamBaseline,
+            'EnsembleBaseline': EnsembleBaseline,
+        }
+        model_cls = class_map.get(class_name, cls)
+        
+        model = model_cls.__new__(model_cls)
+        for key, value in state.items():
+            setattr(model, key, value)
+        
+        return model
 
 
 class GlobalMeanBaseline(BaselineModel):
@@ -714,7 +827,11 @@ def compare_baselines(games_df, test_df=None, models=None):
             MovingAverageBaseline({'window': 10}),
             WeightedHistoryBaseline({'decay': 0.9}),
             WeightedHistoryBaseline({'decay': 0.95}),
-            PoissonBaseline()
+            PoissonBaseline(),
+            DixonColesBaseline(),
+            DixonColesBaseline({'decay': 0.98}),
+            BayesianTeamBaseline(),
+            BayesianTeamBaseline({'prior_weight': 10}),
         ]
     
     results = []
@@ -733,6 +850,339 @@ def compare_baselines(games_df, test_df=None, models=None):
         })
     
     return pd.DataFrame(results).sort_values('rmse')
+
+
+# ── ADVANCED BASELINES ────────────────────────────────────────────
+
+class DixonColesBaseline(BaselineModel):
+    """
+    Dixon-Coles Poisson model — the gold standard for match outcome
+    prediction in soccer and hockey analytics.
+
+    Jointly estimates per-team attack/defense strengths via iterative
+    maximum-likelihood with optional time-decay weighting (recent games
+    matter more).  Produces calibrated Poisson means for each side.
+
+    Parameters
+    ----------
+    params : dict
+        max_iter : int   – EM-style iterations (default 50)
+        tol      : float – convergence tolerance (default 1e-6)
+        decay    : float – per-game exponential decay weight, 0-1
+                           (1.0 = no decay, 0.95 = recent-heavy)
+        home_adv : float – initial home-advantage multiplier (fitted)
+    """
+
+    def __init__(self, params=None):
+        super().__init__(params)
+        self.max_iter = self.params.get('max_iter', 50)
+        self.tol = self.params.get('tol', 1e-6)
+        self.decay = self.params.get('decay', 1.0)
+        self.attack = {}
+        self.defense = {}
+        self.home_adv = self.params.get('home_adv', 1.15)
+        self.league_avg = None
+
+    def fit(self, games_df):
+        """Iteratively estimate attack / defense strengths."""
+        ht_col = get_column(games_df, 'home_team')
+        at_col = get_column(games_df, 'away_team')
+        hg_col = get_column(games_df, 'home_goals')
+        ag_col = get_column(games_df, 'away_goals')
+
+        hteams = games_df[ht_col].values
+        ateams = games_df[at_col].values
+        hgoals = games_df[hg_col].values.astype(float)
+        agoals = games_df[ag_col].values.astype(float)
+        n = len(games_df)
+
+        # Time-decay weights (last game has weight 1, older ones decay)
+        weights = np.array([self.decay ** (n - 1 - i) for i in range(n)])
+
+        teams = sorted(set(hteams) | set(ateams))
+        # Initialise
+        atk = {t: 1.0 for t in teams}
+        dfn = {t: 1.0 for t in teams}
+        home_adv = self.home_adv
+        self.league_avg = float(np.mean(np.concatenate([hgoals, agoals])))
+
+        for iteration in range(self.max_iter):
+            old_atk = dict(atk)
+            old_dfn = dict(dfn)
+            old_ha = home_adv
+
+            # --- update attack strengths ---
+            for t in teams:
+                # Games where t is home
+                mask_h = hteams == t
+                # Games where t is away
+                mask_a = ateams == t
+
+                numerator = float(
+                    np.sum(hgoals[mask_h] * weights[mask_h]) +
+                    np.sum(agoals[mask_a] * weights[mask_a])
+                )
+
+                denom = 0.0
+                if mask_h.any():
+                    opp_def = np.array([dfn[a] for a in ateams[mask_h]])
+                    denom += float(np.sum(home_adv * opp_def * weights[mask_h]))
+                if mask_a.any():
+                    opp_def = np.array([dfn[h] for h in hteams[mask_a]])
+                    denom += float(np.sum(opp_def / 1.0 * weights[mask_a]))  # away
+
+                atk[t] = (numerator / denom) if denom > 0 else 1.0
+
+            # --- update defense strengths ---
+            for t in teams:
+                mask_h = hteams == t
+                mask_a = ateams == t
+
+                numerator = float(
+                    np.sum(agoals[mask_h] * weights[mask_h]) +
+                    np.sum(hgoals[mask_a] * weights[mask_a])
+                )
+
+                denom = 0.0
+                if mask_h.any():
+                    opp_atk = np.array([atk[a] for a in ateams[mask_h]])
+                    denom += float(np.sum(opp_atk * weights[mask_h]))  # they're away
+                if mask_a.any():
+                    opp_atk = np.array([atk[h] for h in hteams[mask_a]])
+                    denom += float(np.sum(home_adv * opp_atk * weights[mask_a]))
+
+                dfn[t] = (numerator / denom) if denom > 0 else 1.0
+
+            # --- update home advantage ---
+            num_ha = float(np.sum(hgoals * weights))
+            den_ha = 0.0
+            for i in range(n):
+                den_ha += atk[hteams[i]] * dfn[ateams[i]] * weights[i]
+            home_adv = (num_ha / den_ha) if den_ha > 0 else 1.15
+
+            # --- normalise attack strengths (mean=1) ---
+            mean_atk = np.mean(list(atk.values()))
+            if mean_atk > 0:
+                for t in teams:
+                    atk[t] /= mean_atk
+
+            # convergence check
+            delta = max(
+                max(abs(atk[t] - old_atk[t]) for t in teams),
+                max(abs(dfn[t] - old_dfn[t]) for t in teams),
+                abs(home_adv - old_ha),
+            )
+            if delta < self.tol:
+                break
+
+        self.attack = atk
+        self.defense = dfn
+        self.home_adv = home_adv
+        self.n_games = n
+        self.n_teams = len(teams)
+        self.is_fitted = True
+        return self
+
+    def predict_goals(self, game):
+        home_team = get_value(game, 'home_team')
+        away_team = get_value(game, 'away_team')
+
+        h_atk = self.attack.get(home_team, 1.0)
+        h_def = self.defense.get(home_team, 1.0)
+        a_atk = self.attack.get(away_team, 1.0)
+        a_def = self.defense.get(away_team, 1.0)
+
+        home_goals = self.league_avg * h_atk * a_def * self.home_adv
+        away_goals = self.league_avg * a_atk * h_def
+        return home_goals, away_goals
+
+    def get_summary(self):
+        top_atk = sorted(self.attack.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_def = sorted(self.defense.items(), key=lambda x: x[1])[:5]
+        return {
+            'model': 'DixonColesBaseline',
+            'decay': self.decay,
+            'home_adv': round(self.home_adv, 4),
+            'league_avg': round(self.league_avg, 3),
+            'n_teams': self.n_teams,
+            'n_games_trained': self.n_games,
+            'iterations': self.max_iter,
+            'top_attack': top_atk,
+            'top_defense': top_def,
+        }
+
+
+class BayesianTeamBaseline(BaselineModel):
+    """
+    Bayesian-regularised team baseline.
+
+    Shrinks per-team attack/defense estimates toward the league average
+    using a simple conjugate-prior approach.  Teams with fewer games are
+    pulled more strongly toward the mean, preventing overfitting on
+    small sample sizes.
+
+    Parameters
+    ----------
+    params : dict
+        prior_weight : float – equivalent number of pseudo-games at
+                               league average (default 5)
+    """
+
+    def __init__(self, params=None):
+        super().__init__(params)
+        self.prior_weight = self.params.get('prior_weight', 5)
+        self.attack = {}
+        self.defense = {}
+        self.league_home_avg = None
+        self.league_away_avg = None
+
+    def fit(self, games_df):
+        ht_col = get_column(games_df, 'home_team')
+        at_col = get_column(games_df, 'away_team')
+        hg_col = get_column(games_df, 'home_goals')
+        ag_col = get_column(games_df, 'away_goals')
+
+        self.league_home_avg = float(games_df[hg_col].mean())
+        self.league_away_avg = float(games_df[ag_col].mean())
+        self.league_avg = (self.league_home_avg + self.league_away_avg) / 2
+
+        goals_for = {}
+        goals_against = {}
+        gp = {}
+
+        for _, game in games_df.iterrows():
+            ht = game[ht_col]; at = game[at_col]
+            hg = game[hg_col]; ag = game[ag_col]
+
+            for team, gf, ga in [(ht, hg, ag), (at, ag, hg)]:
+                goals_for.setdefault(team, 0.0)
+                goals_against.setdefault(team, 0.0)
+                gp.setdefault(team, 0)
+                goals_for[team] += gf
+                goals_against[team] += ga
+                gp[team] += 1
+
+        pw = self.prior_weight
+        for team in gp:
+            n = gp[team]
+            raw_atk = goals_for[team] / n
+            raw_def = goals_against[team] / n
+            # Bayesian shrinkage: weighted average of team rate and league rate
+            self.attack[team] = (raw_atk * n + self.league_avg * pw) / (n + pw)
+            self.defense[team] = (raw_def * n + self.league_avg * pw) / (n + pw)
+
+        self.n_games = len(games_df)
+        self.n_teams = len(gp)
+        self.is_fitted = True
+        return self
+
+    def predict_goals(self, game):
+        home_team = get_value(game, 'home_team')
+        away_team = get_value(game, 'away_team')
+
+        h_atk = self.attack.get(home_team, self.league_avg)
+        h_def = self.defense.get(home_team, self.league_avg)
+        a_atk = self.attack.get(away_team, self.league_avg)
+        a_def = self.defense.get(away_team, self.league_avg)
+
+        # Home advantage baked into league averages
+        home_factor = self.league_home_avg / self.league_avg
+        away_factor = self.league_away_avg / self.league_avg
+
+        home_goals = (h_atk * (a_def / self.league_avg)) * home_factor
+        away_goals = (a_atk * (h_def / self.league_avg)) * away_factor
+
+        return home_goals, away_goals
+
+    def get_summary(self):
+        return {
+            'model': 'BayesianTeamBaseline',
+            'prior_weight': self.prior_weight,
+            'league_avg': round(self.league_avg, 3),
+            'n_teams': self.n_teams,
+            'n_games_trained': self.n_games,
+            'top_attack': sorted(self.attack.items(), key=lambda x: x[1], reverse=True)[:5],
+            'top_defense': sorted(self.defense.items(), key=lambda x: x[1])[:5],
+        }
+
+
+class EnsembleBaseline(BaselineModel):
+    """
+    Blends multiple baseline models' predictions.
+
+    Uses a simple weighted average.  Weights can be uniform, inverse-RMSE,
+    or explicitly provided.
+
+    Parameters
+    ----------
+    params : dict
+        models  : list[BaselineModel]  – sub-models (must be fitted)
+        weights : list[float] | None   – explicit blend weights
+        method  : str – 'uniform' | 'inverse_rmse' (default 'inverse_rmse')
+    """
+
+    def __init__(self, params=None):
+        super().__init__(params)
+        self.sub_models = self.params.get('models', [])
+        self.weights = self.params.get('weights', None)
+        self.method = self.params.get('method', 'inverse_rmse')
+
+    def fit(self, games_df):
+        """Fit sub-models and calibrate weights if needed."""
+        # Split a small calibration set from training data
+        cal_split = int(len(games_df) * 0.75)
+        train_part = games_df.iloc[:cal_split]
+        cal_part = games_df.iloc[cal_split:]
+
+        for m in self.sub_models:
+            m.fit(train_part)
+
+        if self.weights is None:
+            if self.method == 'inverse_rmse':
+                rmses = []
+                for m in self.sub_models:
+                    metrics = m.evaluate(cal_part)
+                    rmses.append(metrics['combined_rmse'])
+                inv = [1.0 / r for r in rmses]
+                total = sum(inv)
+                self.weights = [w / total for w in inv]
+            else:
+                n = len(self.sub_models)
+                self.weights = [1.0 / n] * n
+
+        # Re-fit on full training data
+        for m in self.sub_models:
+            m.fit(games_df)
+
+        self.n_games = len(games_df)
+        self.is_fitted = True
+        return self
+
+    def predict_goals(self, game):
+        h_preds, a_preds = [], []
+        for m in self.sub_models:
+            h, a = m.predict_goals(game)
+            h_preds.append(h)
+            a_preds.append(a)
+
+        home_goals = sum(w * h for w, h in zip(self.weights, h_preds))
+        away_goals = sum(w * a for w, a in zip(self.weights, a_preds))
+        return home_goals, away_goals
+
+    def get_summary(self):
+        sub_names = []
+        for m in self.sub_models:
+            try:
+                sub_names.append(m.get_summary()['model'])
+            except Exception:
+                sub_names.append(type(m).__name__)
+        return {
+            'model': 'EnsembleBaseline',
+            'sub_models': sub_names,
+            'weights': [round(w, 4) for w in (self.weights or [])],
+            'method': self.method,
+            'n_games_trained': self.n_games,
+        }
 
 
 # Convenience aliases

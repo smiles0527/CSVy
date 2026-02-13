@@ -310,26 +310,32 @@ class NeuralNetworkModel:
         cv: int = 5
     ) -> Dict[str, Any]:
         """
-        Perform cross-validation.
+        Perform cross-validation with proper scaling per fold (no data leakage).
         
-        Note: Creates fresh model instances for each fold.
+        Uses a Pipeline(scaler, model) so the scaler is fit only on each
+        training fold. Creates a fresh clone of the model for CV.
         
         Returns
         -------
         dict
             Cross-validation results with mean and std scores.
         """
+        from sklearn.pipeline import Pipeline
+        
         if isinstance(X, pd.DataFrame):
             X = X.values
         if isinstance(y, pd.Series):
             y = y.values
         
-        # Scale features
-        X_scaled = self.scaler.fit_transform(X)
+        # Build pipeline: scaler fits per-fold (no leakage), fresh model clone
+        scaler_class = type(self.scaler)
+        cv_pipeline = Pipeline([
+            ('scaler', scaler_class()),
+            ('model', clone(self.model)),
+        ])
         
-        # Cross-validate
         cv_scores = cross_val_score(
-            self.model, X_scaled, y,
+            cv_pipeline, X, y,
             cv=cv,
             scoring='neg_mean_squared_error'
         )
@@ -338,8 +344,8 @@ class NeuralNetworkModel:
         
         return {
             'cv_rmse_scores': rmse_scores,
-            'cv_rmse_mean': rmse_scores.mean(),
-            'cv_rmse_std': rmse_scores.std(),
+            'cv_rmse_mean': float(rmse_scores.mean()),
+            'cv_rmse_std': float(rmse_scores.std()),
         }
     
     def get_loss_curve(self) -> Optional[List[float]]:
