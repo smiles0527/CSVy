@@ -1,0 +1,17 @@
+game_id,home_team,away_team,predicted_score_home,predicted_score_away,predicted_winner,home_goalie,away_goalie
+1,brazil,kazakhstan,3.25,2.04,brazil,player_id_14,player_id_192
+2,netherlands,mongolia,3.54,1.92,netherlands,player_id_148,player_id_220
+3,peru,rwanda,3.54,1.9,peru,player_id_218,player_id_62
+4,thailand,oman,4.13,2.82,thailand,player_id_142,player_id_266
+5,pakistan,germany,3.57,2.82,pakistan,player_id_106,player_id_75
+6,india,usa,3.19,2.34,india,player_id_257,player_id_152
+7,panama,switzerland,3.51,2.16,panama,player_id_293,player_id_86
+8,iceland,canada,2.85,2.61,iceland,player_id_16,player_id_232
+9,china,france,4.11,3.26,china,player_id_216,player_id_208
+10,philippines,morocco,3.07,2.06,philippines,player_id_38,player_id_25
+11,ethiopia,saudi_arabia,3.07,2.47,ethiopia,player_id_258,player_id_212
+12,singapore,new_zealand,3.4,2.52,singapore,player_id_123,player_id_36
+13,guatemala,south_korea,3.46,2.99,guatemala,player_id_141,player_id_80
+14,uk,mexico,3.59,2.53,uk,player_id_40,player_id_103
+15,vietnam,serbia,2.73,3.12,serbia,player_id_60,player_id_12
+16,indonesia,uae,3.03,2.27,indonesia,player_id_93,player_id_259

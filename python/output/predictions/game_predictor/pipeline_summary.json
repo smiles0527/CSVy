@@ -1,0 +1,396 @@
+{
+  "model": "GamePredictor (Poisson, alpha=20) + Elo 50/50 blend",
+  "cv_metrics": {
+    "gp_cv_rmse": 1.7498,
+    "gp_cv_wa": 0.5709,
+    "elo_cv_rmse": 1.7464,
+    "elo_cv_wa": 0.5579,
+    "blend_cv_rmse": 1.7364,
+    "blend_cv_wa": 0.5762
+  },
+  "model_config": {
+    "model_type": "poisson",
+    "alpha": 20
+  },
+  "blend_weight": {
+    "elo": 0.5,
+    "gp": 0.5
+  },
+  "features": [
+    "att_gf",
+    "att_xgf",
+    "att_finish",
+    "att_shots",
+    "att_max_xg",
+    "att_win_rate",
+    "def_ga",
+    "def_xga",
+    "def_save_rate",
+    "def_shots_ag",
+    "def_win_rate",
+    "goalie_gsax",
+    "goalie_sv",
+    "att_pp_eff",
+    "def_pk_eff",
+    "att_1st_xg",
+    "def_pen",
+    "h2h_goals",
+    "h2h_n",
+    "is_home",
+    "venue_avg"
+  ],
+  "feature_importance": [
+    [
+      "h2h_goals",
+      0.065
+    ],
+    [
+      "def_ga",
+      0.0111
+    ],
+    [
+      "att_gf",
+      0.0096
+    ],
+    [
+      "goalie_sv",
+      -0.0094
+    ],
+    [
+      "def_save_rate",
+      -0.0093
+    ],
+    [
+      "goalie_gsax",
+      -0.0092
+    ],
+    [
+      "att_xgf",
+      0.0075
+    ],
+    [
+      "venue_avg",
+      0.0072
+    ],
+    [
+      "is_home",
+      0.0072
+    ],
+    [
+      "def_xga",
+      0.007
+    ],
+    [
+      "def_win_rate",
+      -0.007
+    ],
+    [
+      "att_1st_xg",
+      0.0065
+    ],
+    [
+      "att_finish",
+      0.0064
+    ],
+    [
+      "att_shots",
+      0.0059
+    ],
+    [
+      "def_pk_eff",
+      0.0056
+    ],
+    [
+      "att_max_xg",
+      0.0056
+    ],
+    [
+      "att_win_rate",
+      0.0047
+    ],
+    [
+      "def_shots_ag",
+      0.0045
+    ],
+    [
+      "att_pp_eff",
+      0.0042
+    ],
+    [
+      "def_pen",
+      0.0041
+    ],
+    [
+      "h2h_n",
+      -0.0004
+    ]
+  ],
+  "comparisons": {
+    "naive_rmse": "~1.83",
+    "baseline_ensemble_rmse": 1.8071,
+    "elo_v3_80_20_rmse": 1.8131,
+    "gp_cv_rmse": 1.7498,
+    "elo_cv_rmse": 1.7464,
+    "blend_cv_rmse": 1.7364
+  },
+  "goalie_mapping": {
+    "brazil": "player_id_14",
+    "canada": "player_id_232",
+    "china": "player_id_216",
+    "ethiopia": "player_id_258",
+    "france": "player_id_208",
+    "germany": "player_id_75",
+    "guatemala": "player_id_141",
+    "iceland": "player_id_16",
+    "india": "player_id_257",
+    "indonesia": "player_id_93",
+    "kazakhstan": "player_id_192",
+    "mexico": "player_id_103",
+    "mongolia": "player_id_220",
+    "morocco": "player_id_25",
+    "netherlands": "player_id_148",
+    "new_zealand": "player_id_36",
+    "oman": "player_id_266",
+    "pakistan": "player_id_106",
+    "panama": "player_id_293",
+    "peru": "player_id_218",
+    "philippines": "player_id_38",
+    "rwanda": "player_id_62",
+    "saudi_arabia": "player_id_212",
+    "serbia": "player_id_12",
+    "singapore": "player_id_123",
+    "south_korea": "player_id_80",
+    "switzerland": "player_id_86",
+    "thailand": "player_id_142",
+    "uae": "player_id_259",
+    "uk": "player_id_40",
+    "usa": "player_id_152",
+    "vietnam": "player_id_60"
+  },
+  "predictions": [
+    {
+      "game_id": 1,
+      "home_team": "brazil",
+      "away_team": "kazakhstan",
+      "predicted_score_home": 3.5,
+      "predicted_score_away": 2.04,
+      "gp_home": 3.17,
+      "gp_away": 2.28,
+      "elo_home": 3.83,
+      "elo_away": 1.81,
+      "predicted_winner": "brazil",
+      "home_goalie": "player_id_14",
+      "away_goalie": "player_id_192"
+    },
+    {
+      "game_id": 2,
+      "home_team": "netherlands",
+      "away_team": "mongolia",
+      "predicted_score_home": 3.35,
+      "predicted_score_away": 1.87,
+      "gp_home": 3.29,
+      "gp_away": 2.17,
+      "elo_home": 3.4,
+      "elo_away": 1.57,
+      "predicted_winner": "netherlands",
+      "home_goalie": "player_id_148",
+      "away_goalie": "player_id_220"
+    },
+    {
+      "game_id": 3,
+      "home_team": "peru",
+      "away_team": "rwanda",
+      "predicted_score_home": 3.47,
+      "predicted_score_away": 2.06,
+      "gp_home": 3.34,
+      "gp_away": 2.19,
+      "elo_home": 3.59,
+      "elo_away": 1.93,
+      "predicted_winner": "peru",
+      "home_goalie": "player_id_218",
+      "away_goalie": "player_id_62"
+    },
+    {
+      "game_id": 4,
+      "home_team": "thailand",
+      "away_team": "oman",
+      "predicted_score_home": 3.73,
+      "predicted_score_away": 2.69,
+      "gp_home": 3.71,
+      "gp_away": 2.84,
+      "elo_home": 3.74,
+      "elo_away": 2.54,
+      "predicted_winner": "thailand",
+      "home_goalie": "player_id_142",
+      "away_goalie": "player_id_266"
+    },
+    {
+      "game_id": 5,
+      "home_team": "pakistan",
+      "away_team": "germany",
+      "predicted_score_home": 3.63,
+      "predicted_score_away": 2.49,
+      "gp_home": 3.36,
+      "gp_away": 2.83,
+      "elo_home": 3.91,
+      "elo_away": 2.15,
+      "predicted_winner": "pakistan",
+      "home_goalie": "player_id_106",
+      "away_goalie": "player_id_75"
+    },
+    {
+      "game_id": 6,
+      "home_team": "india",
+      "away_team": "usa",
+      "predicted_score_home": 3.39,
+      "predicted_score_away": 2.47,
+      "gp_home": 3.13,
+      "gp_away": 2.51,
+      "elo_home": 3.65,
+      "elo_away": 2.43,
+      "predicted_winner": "india",
+      "home_goalie": "player_id_257",
+      "away_goalie": "player_id_152"
+    },
+    {
+      "game_id": 7,
+      "home_team": "panama",
+      "away_team": "switzerland",
+      "predicted_score_home": 3.33,
+      "predicted_score_away": 2.21,
+      "gp_home": 3.27,
+      "gp_away": 2.38,
+      "elo_home": 3.39,
+      "elo_away": 2.04,
+      "predicted_winner": "panama",
+      "home_goalie": "player_id_293",
+      "away_goalie": "player_id_86"
+    },
+    {
+      "game_id": 8,
+      "home_team": "iceland",
+      "away_team": "canada",
+      "predicted_score_home": 3.14,
+      "predicted_score_away": 2.59,
+      "gp_home": 2.89,
+      "gp_away": 2.68,
+      "elo_home": 3.39,
+      "elo_away": 2.49,
+      "predicted_winner": "iceland",
+      "home_goalie": "player_id_16",
+      "away_goalie": "player_id_232"
+    },
+    {
+      "game_id": 9,
+      "home_team": "china",
+      "away_team": "france",
+      "predicted_score_home": 3.64,
+      "predicted_score_away": 2.76,
+      "gp_home": 3.58,
+      "gp_away": 3.05,
+      "elo_home": 3.7,
+      "elo_away": 2.46,
+      "predicted_winner": "china",
+      "home_goalie": "player_id_216",
+      "away_goalie": "player_id_208"
+    },
+    {
+      "game_id": 10,
+      "home_team": "philippines",
+      "away_team": "morocco",
+      "predicted_score_home": 3.09,
+      "predicted_score_away": 2.12,
+      "gp_home": 2.98,
+      "gp_away": 2.33,
+      "elo_home": 3.2,
+      "elo_away": 1.91,
+      "predicted_winner": "philippines",
+      "home_goalie": "player_id_38",
+      "away_goalie": "player_id_25"
+    },
+    {
+      "game_id": 11,
+      "home_team": "ethiopia",
+      "away_team": "saudi_arabia",
+      "predicted_score_home": 3.11,
+      "predicted_score_away": 2.49,
+      "gp_home": 2.97,
+      "gp_away": 2.61,
+      "elo_home": 3.25,
+      "elo_away": 2.37,
+      "predicted_winner": "ethiopia",
+      "home_goalie": "player_id_258",
+      "away_goalie": "player_id_212"
+    },
+    {
+      "game_id": 12,
+      "home_team": "singapore",
+      "away_team": "new_zealand",
+      "predicted_score_home": 3.29,
+      "predicted_score_away": 2.71,
+      "gp_home": 3.21,
+      "gp_away": 2.69,
+      "elo_home": 3.37,
+      "elo_away": 2.74,
+      "predicted_winner": "singapore",
+      "home_goalie": "player_id_123",
+      "away_goalie": "player_id_36"
+    },
+    {
+      "game_id": 13,
+      "home_team": "guatemala",
+      "away_team": "south_korea",
+      "predicted_score_home": 3.41,
+      "predicted_score_away": 2.92,
+      "gp_home": 3.31,
+      "gp_away": 2.97,
+      "elo_home": 3.51,
+      "elo_away": 2.88,
+      "predicted_winner": "guatemala",
+      "home_goalie": "player_id_141",
+      "away_goalie": "player_id_80"
+    },
+    {
+      "game_id": 14,
+      "home_team": "uk",
+      "away_team": "mexico",
+      "predicted_score_home": 3.69,
+      "predicted_score_away": 2.49,
+      "gp_home": 3.33,
+      "gp_away": 2.66,
+      "elo_home": 4.04,
+      "elo_away": 2.33,
+      "predicted_winner": "uk",
+      "home_goalie": "player_id_40",
+      "away_goalie": "player_id_103"
+    },
+    {
+      "game_id": 15,
+      "home_team": "vietnam",
+      "away_team": "serbia",
+      "predicted_score_home": 3.0,
+      "predicted_score_away": 2.96,
+      "gp_home": 2.8,
+      "gp_away": 3.08,
+      "elo_home": 3.19,
+      "elo_away": 2.83,
+      "predicted_winner": "vietnam",
+      "home_goalie": "player_id_60",
+      "away_goalie": "player_id_12"
+    },
+    {
+      "game_id": 16,
+      "home_team": "indonesia",
+      "away_team": "uae",
+      "predicted_score_home": 3.15,
+      "predicted_score_away": 2.2,
+      "gp_home": 2.96,
+      "gp_away": 2.45,
+      "elo_home": 3.34,
+      "elo_away": 1.95,
+      "predicted_winner": "indonesia",
+      "home_goalie": "player_id_93",
+      "away_goalie": "player_id_259"
+    }
+  ]
+}

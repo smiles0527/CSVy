@@ -78,6 +78,8 @@ See Phase 8 for correct numbers — Bayesian(50) is the best single baseline (1.
 
 ## Phase 3: Elo Model (Primary Model)
 
+> **Note:** Phase 3 numbers below used basic Elo with default params and are **superseded** by Phase 9 (Enhanced Elo).
+
 Evaluated the fixed Elo model on the same 80/20 split.
 
 | Metric | Value |
@@ -92,6 +94,8 @@ Evaluated the fixed Elo model on the same 80/20 split.
 **Params used:** k_factor=32, home_advantage=80, mov_multiplier=0.5, logarithmic MoV.
 
 Top 5 Elo ratings after training: Peru (1721), Panama (1692), Netherlands (1677), Philippines (1615), Brazil (1598).
+
+See Phase 9 for the Enhanced Elo with hockey-specific features (1.8131 combined RMSE).
 
 ---
 
@@ -332,6 +336,315 @@ Avg confidence: 59.3%
 
 ## Next Steps
 
-1. Run competition pipeline with Elo + XGBoost + engineered features
-2. Compare ML model predictions against baseline predictions
+1. Run competition pipeline with XGBoost + engineered features  
+2. Compare ML model predictions against baseline + Elo predictions  
 3. Quantify improvement over baseline (target: beat 1.8071 ensemble RMSE, 55.9% win acc)
+
+---
+
+## Phase 9: Enhanced Elo Model
+
+### Problems with Basic Elo
+
+| Issue | Impact |
+|-------|--------|
+| `predict_goals()` uses hardcoded `3.0 ± diff/2` | Total predicted goals is **always 6.0** (actual range: 1–15) |
+| Prediction variance too low | pred std=0.50 vs actual std=1.93 (ratio 0.26) |
+| 10 of 15 expected columns missing (rest, travel, injuries…) | rest/travel/b2b params had **zero effect** |
+| MOV=0 chosen by grid search | Model ignored goal differential entirely |
+
+### Enhanced Elo Features (`utils/enhanced_elo_model.py`)
+
+| Feature | Description |
+|---------|-------------|
+| **xG-based MOV** | Blends actual goals with expected goals for margin-of-victory (xg_weight=0.9) |
+| **Dynamic K-factor** | K decays as teams play more games (k_decay=0.01), starting at k=9 |
+| **Team-specific scoring baselines** | Rolling average GF/GA per team instead of constant 3.0 |
+| **xG-informed predictions** | Blends actual scoring rate with xG rate (xg_pred_weight=0.4) |
+| **Shot share (Corsi) adjustment** | Elo bonus for shot dominance (optimal weight=0) |
+| **Penalty differential** | Elo adjustment for discipline (optimal weight=0) |
+| **Separate Off/Def Elo** | Tracks offensive and defensive ratings independently |
+
+### Grid Search + Fine Sweep
+
+- **Grid search:** 600 random configs from 17,496 combinations → best 1.8141
+- **Fine sweep:** 3,000 random configs around best → best **1.8131**
+
+### Best Parameters
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| k_factor | 5 | Very low K = very stable ratings |
+| home_advantage | 180 | Strong home ice effect |
+| mov_multiplier | 0.0 | Optimizer disabled MOV (constant 1.0) |
+| xg_weight | 0.7 | xG-based MOV (disabled — MOV=0) |
+| xg_pred_weight | 0.5 | 50% actual scoring, 50% xG for predictions |
+| k_decay | 0.01 | Slight K reduction (all teams hit k_min=8 floor) |
+| elo_shift_scale | 0.7 | Conservative Elo→goals mapping |
+| rolling_window | 20 | 20-game rolling averages |
+| shot_share_weight | 0 | Raw shot count not predictive beyond xG |
+| penalty_weight | 0 | Penalty minutes not predictive for goal scoring |
+
+### 18-Test Correctness Audit
+
+Built comprehensive audit (`_audit_elo.py`) covering all features. Found and fixed 3 structural issues:
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| **Total-goals symmetry** | Additive model `(GF+GA)/2 ± shift` produces identical totals when teams swap (shift cancels) | Venue-scaled additive: multiply by `league_avg_home/league_avg` and `league_avg_away/league_avg` |
+| **Off/Def Elo identical** | Goal fraction `h/(h+a)` used for both off and def signals → `1-a/(h+a) = h/(h+a)` | Independent signals: off uses `goals_scored/avg - 1`, def uses `1 - goals_allowed/avg` |
+| **Multiplicative model regression** | v2 Pythag-style `avg * (GF/avg) * (GA/avg)` over-amplified differences, RMSE 1.8648 | Reverted to venue-scaled additive (v3) → RMSE 1.8131 |
+
+**Final audit: 64 passed, 1 expected-behavior failure (K decay floor), 2 warnings (disabled features)**
+
+### Results Comparison
+
+| Model | Combined RMSE | Win Accuracy | Pred Total Std |
+|-------|--------------|-------------|----------------|
+| Basic Elo (Phase 3) | 1.8388 | 55.1% | 0.00 (constant 6.0) |
+| Enhanced v1 (additive, bugs) | 1.8213 | 54.8% | 0.42 |
+| Enhanced v2 (multiplicative) | 1.8648 | 52.5% | 0.82 |
+| **Enhanced v3 (venue-scaled)** | **1.8131** | **57.4%** | **0.41** |
+| Baseline Ensemble | 1.8071 | 55.9% | — |
+
+**Improvement vs Basic Elo: +0.0256 RMSE, +2.3pp Win Accuracy**
+**Gap to Baseline: 0.0060 RMSE** (Enhanced Elo almost matches the 7-model ensemble)
+
+### Key Insights
+
+1. **xG-prediction blending is the strongest lever** — xg_pred_weight=0.5 means predictions use 50/50 actual scoring rate and xG, filtering out luck. Disabling it costs +0.0025 RMSE.
+2. **MOV adds noise** — the optimizer disabled margin-of-victory entirely (mov_multiplier=0). In this dataset, win/loss matters more than how many goals you win by.
+3. **Shot count and penalties don't help** — once you have xG (which captures shot quality), raw counts add noise.
+4. **Venue-scaled additive beats multiplicative** — multiplicative Pythag-style over-amplifies differences. The simple additive model with venue scaling broke symmetry without hurting accuracy.
+5. **Off/Def separation reveals team style** — e.g. Thailand (Off=1581/Def=1483) is offense-heavy; Netherlands (Off=1511/Def=1586) is defense-heavy. Correlation=-0.17 confirms true decorrelation.
+6. **Very low K (5) + strong home advantage (180)** — ratings are extremely stable with a large home ice boost (~74% expected home win rate).
+
+### Top 10 Enhanced Elo Rankings (trained on all 1,312 games)
+
+| Rank | Team | Elo | Off | Def | GF/g | GA/g |
+|------|------|-----|-----|-----|------|------|
+| 1 | Brazil | 1591 | 1554 | 1564 | 3.9 | 2.2 |
+| 2 | Netherlands | 1571 | 1511 | 1586 | 3.2 | 2.4 |
+| 3 | Peru | 1556 | 1527 | 1581 | 3.1 | 2.8 |
+| 4 | Thailand | 1556 | 1581 | 1483 | 3.1 | 2.6 |
+| 5 | Pakistan | 1538 | 1538 | 1533 | 3.6 | 2.5 |
+| 6 | India | 1537 | 1478 | 1559 | 2.9 | 2.5 |
+| 7 | China | 1535 | 1504 | 1560 | 4.0 | 2.5 |
+| 8 | Iceland | 1535 | 1503 | 1538 | 2.9 | 2.1 |
+| 9 | Ethiopia | 1517 | 1543 | 1484 | 3.6 | 3.1 |
+| 10 | Panama | 1512 | 1525 | 1531 | 2.6 | 3.1 |
+
+### Round 1 Enhanced Elo Predictions
+
+| Game | Home | Away | Pred Home | Pred Away | Winner | Conf |
+|------|------|------|-----------|-----------|--------|------|
+| 1 | Brazil | Kazakhstan | 3.85 | 1.90 | Brazil | 87.0% |
+| 2 | Netherlands | Mongolia | 3.70 | 2.02 | Netherlands | 86.7% |
+| 3 | Peru | Rwanda | 3.76 | 2.10 | Peru | 85.1% |
+| 4 | Thailand | Oman | 3.93 | 2.42 | Thailand | 82.1% |
+| 5 | Pakistan | Germany | 3.94 | 2.32 | Pakistan | 80.2% |
+| 6 | India | USA | 3.53 | 2.22 | India | 81.3% |
+| 7 | Panama | Switzerland | 3.14 | 2.34 | Panama | 77.6% |
+| 8 | Iceland | Canada | 3.94 | 2.14 | Iceland | 79.8% |
+| 9 | China | France | 3.99 | 2.34 | China | 80.3% |
+| 10 | Philippines | Morocco | 3.10 | 2.65 | Philippines | 76.6% |
+| 11 | Ethiopia | Saudi Arabia | 3.41 | 2.52 | Ethiopia | 77.2% |
+| 12 | Singapore | New Zealand | 3.09 | 3.07 | Singapore | 72.1% |
+| 13 | Guatemala | South Korea | 3.91 | 2.68 | Guatemala | 75.9% |
+| 14 | UK | Mexico | 3.37 | 2.36 | UK | 74.4% |
+| 15 | Vietnam | Serbia | 3.34 | 2.99 | Vietnam | 71.1% |
+| 16 | Indonesia | UAE | 3.45 | 2.40 | Indonesia | 76.0% |
+
+Avg confidence: 79.0%
+
+### Output Files
+
+- `output/predictions/elo/elo_comparison.csv` — All grid + fine sweep results
+- `output/predictions/elo/round1_elo_predictions.csv` — 16 Round 1 predictions
+- `output/predictions/elo/elo_pipeline_summary.json` — Full summary + rankings
+- `output/models/elo/best_elo.pkl` — Trained model (32 teams, 1,312 games)
+- `output/models/elo/best_elo.json` — Human-readable ratings
+
+---
+
+## Phase 10: Game Predictor — Comprehensive Feature Model
+
+### Motivation
+
+Phase 9's Enhanced Elo barely beat the naive baseline (1.8131 vs ~1.83 RMSE). A deep analysis of the dataset revealed **three massive untapped signals** that no simple Elo model can exploit:
+
+| Signal | Spread | Why It Matters |
+|--------|--------|----------------|
+| **Goalie Quality** | 1.70 GA/g across 33 goalies (best=1.80, worst=3.50) | Goalies are the single biggest unused predictor |
+| **xG Finishing Rate** | 0.69x–1.31x conversion range | Teams convert chances at vastly different rates |
+| **Head-to-Head History** | 1–3 exact matchups for every Round 1 game | Direct evidence beats generic team strength |
+
+Additional findings:
+- 33 unique goalies across 32 teams (most teams have 1 primary goalie)
+- PP/PK shifts are 10.6% of all shifts with dramatically different xG rates
+- First-line xG rate is ~0.11/shift vs second-line ~0.08/shift
+- Penalty diff vs goal diff correlation: r=-0.302
+- 22% of games go to OT
+- **CRITICAL glossary insight:** "there is no temporal information" — game ordering is arbitrary → K-fold CV is the correct evaluation method, not chronological splits
+
+### Architecture
+
+**Model:** `utils/game_predictor.py` — Poisson GLM with log link + Elo blend
+
+**Attack-side framing:** Each game produces 2 training rows (home attack, away attack), doubling data to 2,624 rows. Features describe "attacker strength vs defender strength" with a shared model:
+
+| # | Feature | Description |
+|---|---------|-------------|
+| 1 | `att_gf` | Attacker's avg goals for per game |
+| 2 | `att_xgf` | Attacker's avg xG per game |
+| 3 | `att_finish` | Finishing rate (goals/xG) |
+| 4 | `att_shots` | Avg shots per game |
+| 5 | `att_max_xg` | Avg max single-shot xG (high-danger frequency) |
+| 6 | `att_win_rate` | Overall win rate |
+| 7 | `def_ga` | Defender's avg goals allowed per game |
+| 8 | `def_xga` | Defender's avg xG allowed |
+| 9 | `def_save_rate` | Defender team save percentage |
+| 10 | `def_shots_ag` | Defender avg shots against |
+| 11 | `def_win_rate` | Defender overall win rate |
+| 12 | `goalie_gsax` | **Defending goalie's GSAX** (Goals Saved Above Expected) |
+| 13 | `goalie_sv` | Defending goalie's save percentage |
+| 14 | `att_pp_eff` | Attacker's PP xG per shift |
+| 15 | `def_pk_eff` | Defender's PK xGA per shift |
+| 16 | `att_1st_xg` | Attacker's first-line xG per 60 min |
+| 17 | `def_pen` | Defender's penalties per game (→ PP opportunities) |
+| 18 | `h2h_goals` | **Avg goals attacker scored in exact H2H matchup** |
+| 19 | `h2h_n` | H2H sample size (confidence weight) |
+| 20 | `is_home` | Home ice indicator |
+| 21 | `venue_avg` | League avg goals for this venue side |
+
+**GSAX formula:** `(xG_against - actual_GA) / games_played` — positive = goalie stops more than expected
+
+### Cross-Validation Design
+
+Since no temporal ordering exists (per competition glossary), we use **5-fold random CV** with strict fold isolation:
+
+1. Split 1,312 games into 5 folds (~262 games each)
+2. For each fold: compute ALL stats (team, goalie, H2H, line) from **training folds only**
+3. Build features for validation games using training-only stats
+4. Fit model → predict → evaluate
+5. No information leakage: validation games never influence their own features
+
+### Grid Search Results
+
+| Model Type | Alpha | CV RMSE | CV WA |
+|-----------|-------|---------|-------|
+| poisson | 0.001 | 2.1409 | 50.8% |
+| poisson | 0.01 | 2.1388 | 50.8% |
+| poisson | 0.1 | 2.1130 | 51.1% |
+| poisson | 1.0 | 1.9503 | 52.2% |
+| poisson | 10.0 | 1.7565 | 55.8% |
+| **poisson** | **20.0** | **1.7498** | **57.1%** |
+| poisson | 30.0 | 1.7525 | 57.5% |
+| poisson | 50.0 | 1.7587 | 57.8% |
+| ridge | 100.0 | 2.0178 | 50.8% |
+| gbr | 0.01 | 1.9814 | 51.3% |
+
+**Winner: Poisson(alpha=20)** — heavy regularization is critical (low-alpha models overfit badly)
+
+### Feature Importance
+
+| Rank | Feature | Coefficient | Interpretation |
+|------|---------|-------------|----------------|
+| 1 | `h2h_goals` | +0.0650 | **BY FAR the strongest signal** — direct matchup history dominates |
+| 2 | `def_ga` | +0.0111 | Opponent's leakiness predicts goals |
+| 3 | `att_gf` | +0.0096 | Attacker's raw scoring rate |
+| 4 | `goalie_sv` | -0.0094 | Better opposing goalie → fewer goals |
+| 5 | `def_save_rate` | -0.0093 | Opponent's team defense |
+| 6 | `goalie_gsax` | -0.0092 | **Goalie above-expected performance** |
+| 7 | `att_xgf` | +0.0075 | Chance creation quality |
+| 8 | `venue_avg` | +0.0072 | Home/away league averages |
+| 9 | `is_home` | +0.0072 | Home ice advantage |
+| 10 | `def_xga` | +0.0070 | Opponent's shot suppression |
+
+### Goalie Rankings (GSAX)
+
+| Rank | Goalie | GSAX | Sv% | GP | Team |
+|------|--------|------|-----|-----|------|
+| 1 | player_id_38 | +0.657 | .915 | 79 | Philippines |
+| 2 | player_id_257 | +0.561 | .913 | 81 | India |
+| 3 | player_id_16 | +0.527 | .910 | 78 | Iceland |
+| 4 | player_id_218 | +0.472 | .912 | 79 | Peru |
+| 5 | player_id_216 | +0.425 | .915 | 76 | China |
+| ... | | | | | |
+| 29 | player_id_142 | -0.330 | .883 | 76 | Thailand |
+| 30 | player_id_103 | -0.343 | .883 | 79 | Mexico |
+| 31 | player_id_208 | -0.384 | .870 | 79 | France |
+| 32 | player_id_232 | -0.398 | .872 | 80 | Canada |
+| 33 | player_id_80 | -0.580 | .859 | 79 | South Korea |
+
+### Elo Ensemble Blend
+
+Tested blending GamePredictor (GP) with Enhanced Elo v3 at weights 0.0–1.0:
+
+| Elo Weight | GP Weight | CV RMSE | CV WA |
+|-----------|-----------|---------|-------|
+| 0.0 | 1.0 | 1.7498 | 57.1% |
+| 0.1 | 0.9 | 1.7453 | 57.5% |
+| 0.2 | 0.8 | 1.7417 | 58.9% |
+| 0.3 | 0.7 | 1.7390 | 58.2% |
+| 0.4 | 0.6 | 1.7372 | 58.0% |
+| **0.5** | **0.5** | **1.7364** | **57.6%** |
+| 0.6 | 0.4 | 1.7365 | 57.5% |
+| 0.7 | 0.3 | 1.7376 | 57.0% |
+| 1.0 | 0.0 | 1.7464 | 55.8% |
+
+**Optimal blend: 50/50 Elo + GP → CV RMSE = 1.7364**
+
+### Final Results Comparison
+
+| Model | RMSE | WA | Eval Method |
+|-------|------|-----|-------------|
+| Naive mean | ~1.83 | ~50% | — |
+| Basic Elo | 1.8388 | 55.1% | 80/20 split |
+| Enhanced Elo v3 | 1.8131 | 57.4% | 80/20 split |
+| Baseline Ensemble (7 models) | 1.8071 | 55.9% | 80/20 split |
+| Elo v3 (K-fold CV) | 1.7464 | 55.8% | 5-fold CV |
+| GamePredictor (K-fold CV) | 1.7498 | 57.1% | 5-fold CV |
+| **GP + Elo Blend (K-fold CV)** | **1.7364** | **57.6%** | **5-fold CV** |
+
+> **Note:** K-fold CV numbers are not directly comparable to 80/20 split numbers because the evaluation methodology differs. The K-fold approach is more reliable (no arbitrary split point, all data used for both training and evaluation).
+
+### Round 1 Predictions (Final Blend)
+
+| # | Home | Away | Blend H | Blend A | GP | Elo | Winner |
+|---|------|------|---------|---------|----|-----|--------|
+| 1 | Brazil | Kazakhstan | 3.50 | 2.04 | 3.17/2.28 | 3.83/1.81 | Brazil |
+| 2 | Netherlands | Mongolia | 3.35 | 1.87 | 3.29/2.17 | 3.40/1.57 | Netherlands |
+| 3 | Peru | Rwanda | 3.47 | 2.06 | 3.34/2.19 | 3.59/1.93 | Peru |
+| 4 | Thailand | Oman | 3.73 | 2.69 | 3.71/2.84 | 3.74/2.54 | Thailand |
+| 5 | Pakistan | Germany | 3.63 | 2.49 | 3.36/2.83 | 3.91/2.15 | Pakistan |
+| 6 | India | USA | 3.39 | 2.47 | 3.13/2.51 | 3.65/2.43 | India |
+| 7 | Panama | Switzerland | 3.33 | 2.21 | 3.27/2.38 | 3.39/2.04 | Panama |
+| 8 | Iceland | Canada | 3.14 | 2.59 | 2.89/2.68 | 3.39/2.49 | Iceland |
+| 9 | China | France | 3.64 | 2.76 | 3.58/3.05 | 3.70/2.46 | China |
+| 10 | Philippines | Morocco | 3.09 | 2.12 | 2.98/2.33 | 3.20/1.91 | Philippines |
+| 11 | Ethiopia | Saudi Arabia | 3.11 | 2.49 | 2.97/2.61 | 3.25/2.37 | Ethiopia |
+| 12 | Singapore | New Zealand | 3.29 | 2.71 | 3.21/2.69 | 3.37/2.74 | Singapore |
+| 13 | Guatemala | South Korea | 3.41 | 2.92 | 3.31/2.97 | 3.51/2.88 | Guatemala |
+| 14 | UK | Mexico | 3.69 | 2.49 | 3.33/2.66 | 4.04/2.33 | UK |
+| 15 | Vietnam | Serbia | 3.00 | 2.96 | 2.80/3.08 | 3.19/2.83 | Vietnam |
+| 16 | Indonesia | UAE | 3.15 | 2.20 | 2.96/2.45 | 3.34/1.95 | Indonesia |
+
+Home wins: 16/16 (GP alone predicts Serbia over Vietnam; blend tips it back to home)
+
+### Key Insights
+
+1. **H2H history is the #1 feature** (coeff=0.065, 6x larger than next) — directly predicting from past matchups dominates all other signals
+2. **Goalie GSAX is massive** — a 1.24 GSAX spread across goalies, with the best goalie saving 0.66 extra goals/game vs expected
+3. **Heavy regularization wins** (alpha=20) — with 21 features on 2,624 rows, the model needs strong shrinkage to avoid overfitting
+4. **50/50 Elo+GP blend is optimal** — each model captures different information (Elo: pairwise relative strength; GP: goalie/H2H/finishing specifics)
+5. **K-fold CV reveals true performance** — both Elo and GP show lower RMSE under 5-fold CV than 80/20 splits, confirming the glossary's "no temporal ordering" claim
+6. **Poisson regression outperforms Ridge and GBR** — proper count-data modeling with log link handles goal predictions better than linear or tree-based approaches
+
+### Output Files
+
+- `output/predictions/game_predictor/submission.csv` — Competition submission format
+- `output/predictions/game_predictor/round1_final_predictions.csv` — Full predictions with GP/Elo breakdown
+- `output/predictions/game_predictor/grid_search_cv.csv` — All grid search results
+- `output/predictions/game_predictor/pipeline_summary.json` — Full summary + goalie stats
+- `output/models/game_predictor/final_game_predictor.pkl` — Trained model

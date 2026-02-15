@@ -1,0 +1,17 @@
+game_id,home_team,away_team,predicted_score_home,predicted_score_away,gp_home,gp_away,elo_home,elo_away,predicted_winner
+1,brazil,kazakhstan,3.6,1.9,3.25,2.04,3.83,1.81,brazil
+2,netherlands,mongolia,3.46,1.71,3.54,1.92,3.4,1.57,netherlands
+3,peru,rwanda,3.57,1.91,3.54,1.9,3.59,1.93,peru
+4,thailand,oman,3.89,2.65,4.13,2.82,3.74,2.54,thailand
+5,pakistan,germany,3.77,2.42,3.57,2.82,3.91,2.15,pakistan
+6,india,usa,3.47,2.4,3.19,2.34,3.65,2.43,india
+7,panama,switzerland,3.44,2.09,3.51,2.16,3.39,2.04,panama
+8,iceland,canada,3.17,2.54,2.85,2.61,3.39,2.49,iceland
+9,china,france,3.86,2.78,4.11,3.26,3.7,2.46,china
+10,philippines,morocco,3.15,1.97,3.07,2.06,3.2,1.91,philippines
+11,ethiopia,saudi_arabia,3.18,2.41,3.07,2.47,3.25,2.37,ethiopia
+12,singapore,new_zealand,3.38,2.65,3.4,2.52,3.37,2.74,singapore
+13,guatemala,south_korea,3.49,2.92,3.46,2.99,3.51,2.88,guatemala
+14,uk,mexico,3.86,2.41,3.59,2.53,4.04,2.33,uk
+15,vietnam,serbia,3.01,2.94,2.73,3.12,3.19,2.83,vietnam
+16,indonesia,uae,3.22,2.08,3.03,2.27,3.34,1.95,indonesia
