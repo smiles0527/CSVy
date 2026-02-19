@@ -1,0 +1,17 @@
+game,game_id,home_team,away_team,pred_home_goals,pred_away_goals,predicted_winner,confidence
+1,game_1,brazil,kazakhstan,3.9393,2.0482,brazil,0.88
+2,game_2,netherlands,mongolia,3.547,1.7186,netherlands,0.8653
+3,game_3,peru,rwanda,3.5378,1.7392,peru,0.8364
+4,game_4,thailand,oman,4.107,2.6503,thailand,0.8267
+5,game_5,pakistan,germany,3.4428,2.4259,pakistan,0.7994
+6,game_6,india,usa,3.397,2.1124,india,0.824
+7,game_7,panama,switzerland,3.4682,2.0058,panama,0.7957
+8,game_8,iceland,canada,3.765,2.2032,iceland,0.7971
+9,game_9,china,france,3.8006,2.3035,china,0.8036
+10,game_10,philippines,morocco,3.3302,2.2238,philippines,0.7676
+11,game_11,ethiopia,saudi_arabia,3.3288,2.266,ethiopia,0.7602
+12,game_12,singapore,new_zealand,3.4904,2.6738,singapore,0.7262
+13,game_13,guatemala,south_korea,3.7086,2.8241,guatemala,0.7506
+14,game_14,uk,mexico,3.9355,2.7161,uk,0.7405
+15,game_15,vietnam,serbia,3.1879,3.064,vietnam,0.7059
+16,game_16,indonesia,uae,3.0335,2.2217,indonesia,0.7482

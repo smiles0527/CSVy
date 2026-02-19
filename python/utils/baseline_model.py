@@ -59,6 +59,34 @@ def get_column(df, field):
     return None
 
 
+def poisson_win_confidence(home_lam, away_lam):
+    """
+    Compute win probability from expected goals (Poisson model).
+    Useful for averaged predictions where we have (avg_home, avg_away) but no model.
+
+    Returns
+    -------
+    float
+        Confidence (max of home_win_prob, away_win_prob) in [0.5, 1.0]
+    """
+    from scipy.stats import poisson
+    lam_h = max(float(home_lam), 0.3)
+    lam_a = max(float(away_lam), 0.3)
+    max_goals = 12
+    home_win_prob = 0.0
+    draw_prob = 0.0
+    for h in range(max_goals + 1):
+        ph = poisson.pmf(h, lam_h)
+        for a in range(max_goals + 1):
+            pa = poisson.pmf(a, lam_a)
+            if h > a:
+                home_win_prob += ph * pa
+            elif h == a:
+                draw_prob += ph * pa
+    home_win_prob += draw_prob / 2.0
+    return max(home_win_prob, 1.0 - home_win_prob)
+
+
 class BaselineModel:
     """
     Abstract base class for all baseline models.
@@ -103,26 +131,48 @@ class BaselineModel:
 
     def predict_winner(self, game):
         """
-        Predict the winner and confidence.
+        Predict the winner and confidence using Poisson-based win probability.
+
+        Models each team's goals as independent Poisson random variables,
+        then sums P(home_goals > away_goals) over the outcome grid.
+        This gives a proper probabilistic confidence instead of a simple
+        goal ratio.
 
         Returns
         -------
         tuple
             (winner_team_name, win_probability)
         """
+        from scipy.stats import poisson
+
         home_goals, away_goals = self.predict_goals(game)
         home_team = get_value(game, 'home_team')
         away_team = get_value(game, 'away_team')
 
-        total = home_goals + away_goals
-        if total == 0:
-            return home_team, 0.5
+        # Clamp predicted goals to avoid degenerate Poisson (lambda must be > 0)
+        lam_h = max(home_goals, 0.3)
+        lam_a = max(away_goals, 0.3)
 
-        home_prob = home_goals / total
-        if home_goals >= away_goals:
-            return home_team, home_prob
+        # Compute P(home wins) by summing over Poisson outcome grid
+        max_goals = 12
+        home_win_prob = 0.0
+        draw_prob = 0.0
+        for h in range(max_goals + 1):
+            ph = poisson.pmf(h, lam_h)
+            for a in range(max_goals + 1):
+                pa = poisson.pmf(a, lam_a)
+                if h > a:
+                    home_win_prob += ph * pa
+                elif h == a:
+                    draw_prob += ph * pa
+
+        # Split draws evenly (hockey has OT/SO so no real draws)
+        home_win_prob += draw_prob / 2.0
+
+        if home_win_prob >= 0.5:
+            return home_team, home_win_prob
         else:
-            return away_team, 1 - home_prob
+            return away_team, 1.0 - home_win_prob
     
     def evaluate(self, games_df):
         """

@@ -1,0 +1,22 @@
+{
+  "n_runs": 8,
+  "mode": "hyperparam",
+  "baseline_only": true,
+  "baseline": {
+    "rmse_mean": 1.817,
+    "rmse_std": 0.0089,
+    "rmse_min": 1.8076,
+    "rmse_max": 1.8263,
+    "all_rmses": [
+      1.8263,
+      1.8086,
+      1.826,
+      1.8082,
+      1.8257,
+      1.8078,
+      1.8255,
+      1.8076
+    ]
+  },
+  "model": "baseline"
+}

@@ -3,7 +3,10 @@
   "best_rmse": 1.8078437745694615,
   "tuned_params": {
     "dixon_coles_decay": 1.0,
-    "bayesian_prior_weight": 20
+    "bayesian_prior_weight": 20,
+    "cv_rmse_dc": 1.7555,
+    "cv_rmse_bayesian": 1.7259,
+    "cv_n_folds": 5
   },
   "test_metrics": {
     "rmse": 1.9036614101729743,
@@ -26,7 +29,7 @@
       "pred_home_goals": 3.73,
       "pred_away_goals": 1.85,
       "predicted_winner": "brazil",
-      "confidence": 0.668
+      "confidence": 0.784
     },
     {
       "game": 2,
@@ -36,7 +39,7 @@
       "pred_home_goals": 3.32,
       "pred_away_goals": 1.62,
       "predicted_winner": "netherlands",
-      "confidence": 0.672
+      "confidence": 0.775
     },
     {
       "game": 3,
@@ -46,7 +49,7 @@
       "pred_home_goals": 3.65,
       "pred_away_goals": 1.86,
       "predicted_winner": "peru",
-      "confidence": 0.663
+      "confidence": 0.775
     },
     {
       "game": 4,
@@ -56,7 +59,7 @@
       "pred_home_goals": 4.42,
       "pred_away_goals": 2.83,
       "predicted_winner": "thailand",
-      "confidence": 0.609
+      "confidence": 0.719
     },
     {
       "game": 5,
@@ -66,7 +69,7 @@
       "pred_home_goals": 3.81,
       "pred_away_goals": 2.46,
       "predicted_winner": "pakistan",
-      "confidence": 0.607
+      "confidence": 0.701
     },
     {
       "game": 6,
@@ -76,7 +79,7 @@
       "pred_home_goals": 3.57,
       "pred_away_goals": 2.29,
       "predicted_winner": "india",
-      "confidence": 0.61
+      "confidence": 0.699
     },
     {
       "game": 7,
@@ -86,7 +89,7 @@
       "pred_home_goals": 3.34,
       "pred_away_goals": 2.12,
       "predicted_winner": "panama",
-      "confidence": 0.612
+      "confidence": 0.696
     },
     {
       "game": 8,
@@ -96,7 +99,7 @@
       "pred_home_goals": 3.53,
       "pred_away_goals": 2.27,
       "predicted_winner": "iceland",
-      "confidence": 0.608
+      "confidence": 0.696
     },
     {
       "game": 9,
@@ -106,7 +109,7 @@
       "pred_home_goals": 3.48,
       "pred_away_goals": 2.27,
       "predicted_winner": "china",
-      "confidence": 0.605
+      "confidence": 0.689
     },
     {
       "game": 10,
@@ -116,7 +119,7 @@
       "pred_home_goals": 3.08,
       "pred_away_goals": 2.24,
       "predicted_winner": "philippines",
-      "confidence": 0.579
+      "confidence": 0.639
     },
     {
       "game": 11,
@@ -126,7 +129,7 @@
       "pred_home_goals": 3.09,
       "pred_away_goals": 2.33,
       "predicted_winner": "ethiopia",
-      "confidence": 0.569
+      "confidence": 0.624
     },
     {
       "game": 12,
@@ -136,7 +139,7 @@
       "pred_home_goals": 3.28,
       "pred_away_goals": 2.82,
       "predicted_winner": "singapore",
-      "confidence": 0.538
+      "confidence": 0.573
     },
     {
       "game": 13,
@@ -146,7 +149,7 @@
       "pred_home_goals": 3.8,
       "pred_away_goals": 3.08,
       "predicted_winner": "guatemala",
-      "confidence": 0.552
+      "confidence": 0.605
     },
     {
       "game": 14,
@@ -156,7 +159,7 @@
       "pred_home_goals": 3.48,
       "pred_away_goals": 2.46,
       "predicted_winner": "uk",
-      "confidence": 0.586
+      "confidence": 0.66
     },
     {
       "game": 15,
@@ -166,7 +169,7 @@
       "pred_home_goals": 3.32,
       "pred_away_goals": 3.16,
       "predicted_winner": "vietnam",
-      "confidence": 0.512
+      "confidence": 0.524
     },
     {
       "game": 16,
@@ -176,7 +179,7 @@
       "pred_home_goals": 3.12,
       "pred_away_goals": 2.15,
       "predicted_winner": "indonesia",
-      "confidence": 0.592
+      "confidence": 0.66
     }
   ]
 }

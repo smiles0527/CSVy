@@ -86,29 +86,41 @@ best_by_acc = results_df.sort_values('win_accuracy', ascending=False).iloc[0]
 print(f"Best by RMSE:    {best_by_rmse['name']} ({best_by_rmse['combined_rmse']:.4f})")
 print(f"Best by Win Acc: {best_by_acc['name']} ({best_by_acc['win_accuracy']:.1%})")
 
-# ── PHASE 2: Fine-tune Dixon-Coles decay ─────────────────────────
+# ── PHASE 2: Fine-tune Dixon-Coles & Bayesian via 5-fold CV ──────
 print()
-print("[2] Fine-tuning Dixon-Coles decay...")
-best_dc_decay, best_dc_rmse = 1.0, 999
+print("[2] Fine-tuning Dixon-Coles decay (5-fold time-based CV)...")
+n_folds = 5
+fold_size = len(games) // n_folds
+
+def cv_rmse(model_factory, param):
+    """5-fold block holdout CV (same structure as Elo pipeline)."""
+    fold_rmses = []
+    for fold in range(n_folds):
+        val_start = fold * fold_size
+        val_end = val_start + fold_size
+        val_df = games.iloc[val_start:val_end]
+        train_df = pd.concat([games.iloc[:val_start], games.iloc[val_end:]])
+        m = model_factory(param)
+        m.fit(train_df)
+        fold_rmses.append(m.evaluate(val_df)['combined_rmse'])
+    return np.mean(fold_rmses), np.std(fold_rmses)
+
+best_dc_decay, best_dc_rmse, best_dc_std = 1.0, 999, 0.0
 for d_pct in range(90, 101):
     d = d_pct / 100.0
-    m = DixonColesBaseline({'decay': d})
-    m.fit(train)
-    r = m.evaluate(test)['combined_rmse']
-    if r < best_dc_rmse:
-        best_dc_decay, best_dc_rmse = d, r
-print(f"  Best Dixon-Coles decay = {best_dc_decay}, RMSE = {best_dc_rmse:.4f}")
+    mean_r, std_r = cv_rmse(lambda decay: DixonColesBaseline({'decay': decay}), d)
+    if mean_r < best_dc_rmse:
+        best_dc_decay, best_dc_rmse, best_dc_std = d, mean_r, std_r
+print(f"  Best Dixon-Coles decay = {best_dc_decay}, CV RMSE = {best_dc_rmse:.4f} ± {best_dc_std:.4f}")
 
 # Fine-tune BayesianTeam prior_weight
-print("\n[3] Fine-tuning Bayesian prior weight...")
-best_pw, best_pw_rmse = 5, 999
+print("\n[3] Fine-tuning Bayesian prior weight (5-fold CV)...")
+best_pw, best_pw_rmse, best_pw_std = 5, 999, 0.0
 for pw in range(1, 21):
-    m = BayesianTeamBaseline({'prior_weight': pw})
-    m.fit(train)
-    r = m.evaluate(test)['combined_rmse']
-    if r < best_pw_rmse:
-        best_pw, best_pw_rmse = pw, r
-print(f"  Best prior_weight = {best_pw}, RMSE = {best_pw_rmse:.4f}")
+    mean_r, std_r = cv_rmse(lambda pw_val: BayesianTeamBaseline({'prior_weight': pw_val}), pw)
+    if mean_r < best_pw_rmse:
+        best_pw, best_pw_rmse, best_pw_std = pw, mean_r, std_r
+print(f"  Best prior_weight = {best_pw}, CV RMSE = {best_pw_rmse:.4f} ± {best_pw_std:.4f}")
 
 # ── PHASE 3: Build ensemble of top baselines ─────────────────────
 print()
@@ -215,6 +227,9 @@ summary = {
     'tuned_params': {
         'dixon_coles_decay': best_dc_decay,
         'bayesian_prior_weight': best_pw,
+        'cv_rmse_dc': round(best_dc_rmse, 4),
+        'cv_rmse_bayesian': round(best_pw_rmse, 4),
+        'cv_n_folds': n_folds,
     },
     'test_metrics': {k: v for k, v in ens_metrics.items()},
     'predictions': predictions,
@@ -231,3 +246,7 @@ print(f"  Comparison:  {OUTPUT / 'baseline_comparison.csv'}")
 print(f"  Predictions: {pred_path}")
 print(f"  Model:       {MODEL_DIR / 'best_baseline.pkl'}")
 print(f"  Summary:     {OUTPUT / 'baseline_pipeline_summary.json'}")
+print()
+print("  For multi-run robustness + uncertainty (std):")
+print("    python _run_recursive.py --baseline-only --mode expand")
+print("    python _run_recursive.py --baseline-only --mode hyperparam")
