@@ -648,3 +648,98 @@ Home wins: 16/16 (GP alone predicts Serbia over Vietnam; blend tips it back to h
 - `output/predictions/game_predictor/grid_search_cv.csv` — All grid search results
 - `output/predictions/game_predictor/pipeline_summary.json` — Full summary + goalie stats
 - `output/models/game_predictor/final_game_predictor.pkl` — Trained model
+
+---
+
+## Phase 11: Competitive Intelligence & Model Optimization
+
+### Motivation
+
+Phase 10 achieved RMSE 1.7364.  But: **how do we know this beats other teams?**
+
+We built a full competitive analysis (`_competitive_analysis.py`) that simulates what different tiers of competitors would build, then identified a critical flaw in our own model.
+
+### Competitor Simulation Results
+
+We implemented 7 competitor tiers from "barely tried" to "our model" and ran the **exact same 5-fold CV** on each:
+
+| Tier | Approach | CV RMSE | What They'd Build |
+|------|----------|---------|-------------------|
+| 0 | Constant (league mean) | 1.7707 | Just predict average every game |
+| 1 | Team averages lookup | 1.7398 | (attGF + defGA) / 2 per game |
+| 2 | Ridge on 6 features | 1.7268 | Simple regression on GF/GA/xG/shots |
+| 3 | Random Forest on 17 feat | 1.7376 | "We used ML!" |
+| 4 | Enhanced Elo | 1.7464 | Sophisticated rating system |
+| 5 | GP Poisson (21 features) | 1.7498 | Our Phase 10 feature model |
+| 6 | GP + Elo blend | 1.7364 | Our Phase 10 final |
+
+### Critical Finding: Simple Ridge Beat Us
+
+**A simple Ridge regression with 6 basic features (RMSE 1.7268) beat our sophisticated 21-feature Poisson + Elo blend (1.7364).** This revealed:
+
+1. **H2H features HURT performance** — removing them improved GP from 1.7498 to 1.7297 (overfitting on 1-3 game samples)
+2. **Complex features add noise** — our 21-feature GP model was worse than simple 6-feature team averages
+3. **Poisson is still right for count data** — but needs fewer, cleaner features
+4. **The Elo component dragged our blend up** at 50/50 weight — too much weight on the weaker model
+
+### Model Optimization
+
+Systematic search across:
+- Model types: Ridge, Poisson, GBR, RF, Lasso at many alpha values
+- Feature subsets: 6 basic, 19 (no H2H), various extended sets
+- Blend architectures: 2-way (any model + Elo), 3-way (Simple Ridge + GP Poisson + Elo)
+- Weight grids: fine-grained 0.05 increments
+
+**Key findings from optimization (`_optimize_v2.py`, `_finetune.py`):**
+
+| Config | CV RMSE | Notes |
+|--------|---------|-------|
+| Ridge(alpha=700), 6 features | 1.7216 | High regularization wins |
+| Ridge(500) + Elo(0.10) blend | 1.7206 | Small Elo weight helps |
+| Poisson(10), 19 features (no H2H) | 1.7297 | Removing H2H improves GP |
+| **3-way: 75% Ridge + 10% GP + 15% Elo** | **1.7207** | **NEW BEST** |
+
+### Robustness Testing
+
+| Test | Result |
+|------|--------|
+| 10 random seeds | Mean=1.7212, Std=0.0023 (very stable) |
+| K=3 through K=10 folds | 1.7207-1.7213 (consistent) |
+| Feature ablation | Goalie features +0.0035 impact, Core team stats +0.0083 (critical) |
+| Submission audit | 16/16 checks pass |
+
+### Final Optimized Architecture
+
+**Three-way ensemble (`_run_optimized_v2.py`):**
+
+| Component | Weight | Model | Features | Alpha |
+|-----------|--------|-------|----------|-------|
+| **Model A: Simple Ridge** | 75% | Ridge regression | 6 (GF, xGF, SF, GA, xGA, is_home) | 700 |
+| **Model B: GP Poisson** | 10% | Poisson GLM | 19 (all except H2H) | 10 |
+| **Model C: Enhanced Elo** | 15% | Elo rating system | N/A | N/A |
+
+### Results Comparison (All 5-fold CV)
+
+| Model | RMSE | WA | Improvement |
+|-------|------|----|-------------|
+| Naive constant | 1.7707 | ~50% | — |
+| **Phase 11 Optimized Blend** | **1.7207** | **59.7%** | — |
+| Phase 10 GP+Elo 50/50 | 1.7364 | 57.6% | +0.0157 worse |
+| Phase 8 Baseline Ensemble | 1.8071 | 55.9% | +0.0864 worse |
+
+**Net improvement: -0.0864 RMSE vs baseline, -0.0157 vs Phase 10**
+
+### Why This Wins
+
+1. **Simple features dominate** — 6 basic team stats (GF, GA, xGF, xGA, SF, SA) capture most of the predictable signal in hockey
+2. **High regularization** — Ridge(alpha=700) with 6 features prevents overfitting while retaining team-specific signal
+3. **Diverse model blend** — Ridge, Poisson, and Elo capture different aspects (linear trends, count data, pairwise strength)
+4. **H2H removal** — 1-3 game H2H samples are pure noise in a 1,312-game dataset
+5. **Weight asymmetry** — 75/10/15 correctly allocates most weight to the best individual model
+
+### Output Files
+
+- `output/predictions/game_predictor/submission.csv` — **Final competition submission**
+- `output/predictions/game_predictor/round1_final_predictions.csv` — Full predictions with all 3 model outputs
+- `output/models/game_predictor/optimized_model_v2.pkl` — All 3 trained models
+- `output/predictions/game_predictor/pipeline_summary.json` — V2 summary

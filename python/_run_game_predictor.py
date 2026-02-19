@@ -95,8 +95,7 @@ print("\n[5/7] Round 1 predictions ...")
 matchups = pd.read_excel('data/WHSDSC_Rnd1_matchups.xlsx')
 home_col = [c for c in matchups.columns if 'home' in c.lower()][0]
 away_col = [c for c in matchups.columns if 'away' in c.lower()][0]
-id_col = [c for c in matchups.columns if 'game' in c.lower() or 'id' in c.lower()]
-id_col = id_col[0] if id_col else None
+id_col = 'game_id' if 'game_id' in matchups.columns else None
 
 # Map teams to their primary goalie for info
 team_goalies = final_model.stats['goalies']
