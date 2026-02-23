@@ -1,12 +1,13 @@
 """
 ELO Model - Reusable Python Module
 
-This is the same EloModel class from the notebook, 
-extracted as a .py file for easy importing.
+Same EloModel from the notebook, extracted for easy importing. Uses the classic
+Elo rating system (like chess) adapted for hockey: each team has a rating, and
+games update ratings based on expected vs actual outcome. We also fold in home
+advantage, rest, travel, injuries—stuff that actually affects who wins.
 
 Usage:
     from utils.elo_model import EloModel
-    
     model = EloModel(params)
     model.fit(games_df)
     metrics = model.evaluate(test_df)
@@ -21,11 +22,11 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
 def rmse_score(y_true, y_pred):
-    """Compute RMSE using the universally correct np.sqrt(MSE) pattern."""
+    """Root mean squared error—how far off our predictions are on average."""
     return float(np.sqrt(mean_squared_error(y_true, y_pred)))
 
 
-# Column name mappings - checks these alternatives in order
+# Different datasets name columns differently; we try these in order until one sticks
 COLUMN_ALIASES = {
     'home_team': ['home_team', 'home', 'team_home', 'h_team'],
     'away_team': ['away_team', 'away', 'team_away', 'a_team', 'visitor', 'visiting_team'],
@@ -46,26 +47,13 @@ COLUMN_ALIASES = {
 
 def get_value(game, field, default=None):
     """
-    Get a value from a game record, checking multiple possible column names.
-    
-    Parameters
-    ----------
-    game : dict or Series
-        Game record
-    field : str
-        Logical field name (e.g., 'home_rest')
-    default : any
-        Value to return if no matching column found
-    
-    Returns
-    -------
-    Value from the first matching column, or default
+    Grab a value from a game row. Tries each possible column name (home_team, home, etc.)
+    and returns the first match. Falls back to default if missing or NaN.
     """
     aliases = COLUMN_ALIASES.get(field, [field])
     for alias in aliases:
         if alias in game:
             val = game[alias]
-            # Handle NaN values
             if pd.isna(val):
                 return default
             return val
@@ -75,9 +63,7 @@ def get_value(game, field, default=None):
 class EloModel:
     def __init__(self, params):
         """
-        Initialize ELO model with hyperparameters.
-        
-        params: dict with keys:
+        Set up the model with your tuning knobs. params is a dict—here's what matters:
             - k_factor: rating change rate (20-40)
             - home_advantage: home ice boost (50-150)
             - initial_rating: starting rating (1500)
@@ -100,134 +86,123 @@ class EloModel:
             - division: division, div, tier
         """
         self.params = params
-        self.ratings = {}
-        self.rating_history = []
+        self.ratings = {}           # team name -> current Elo. Filled in during fit.
+        self.rating_history = []    # log of rating changes after each game
     
     def initialize_ratings(self, teams, divisions=None):
-        """Initialize team ratings based on division tier.
-        
-        Parameters
-        ----------
-        teams : array-like
-            List of team names.
-        divisions : dict-like or Series, optional
-            Maps team name → division string (e.g., 'D1', 'D2', 'D3').
+        """
+        Give every team a starting rating. If we know divisions (D1/D2/D3), we
+        bump D1 up and D3 down a bit—they're not all equal coming in.
         """
         initial = self.params.get('initial_rating', 1500)
         division_ratings = {
-            'D1': initial + 100,
+            'D1': initial + 100,   # Top tier gets a head start
             'D2': initial,
-            'D3': initial - 100
+            'D3': initial - 100    # Lower tier starts behind
         }
-        
+
         for team in teams:
             if divisions is not None and team in divisions:
-                div = divisions[team] if not hasattr(divisions, 'get') else divisions.get(team)
+                div = divisions[team] if not hasattr(divisions, 'get') else divisions.get(team)   # Handle both dict and Series
                 self.ratings[team] = division_ratings.get(div, initial)
             else:
                 self.ratings[team] = initial
-    
+
     def calculate_expected_score(self, team_elo, opponent_elo):
-        """Calculate expected win probability."""
+        """Classic Elo: what's the chance this team wins? 0-1 scale."""
         return 1 / (1 + 10 ** ((opponent_elo - team_elo) / 400))
     
     def calculate_mov_multiplier(self, goal_diff):
-        """Calculate margin of victory multiplier."""
+        """
+        Blowouts should move ratings more than close games. Linear = proportional
+        to goal diff. Log dampens it so a 6-goal rout doesn't swing ratings crazy.
+        """
         mov = self.params.get('mov_multiplier', 0)
         if mov == 0:
             return 1.0
-        
+
         if self.params.get('mov_method', 'logarithmic') == 'linear':
             return 1 + (abs(goal_diff) * mov)
         return 1 + (np.log(abs(goal_diff) + 1) * mov)
     
     def get_actual_score(self, outcome):
-        """Convert game outcome to actual score (0-1)."""
-        if outcome in ['RW', 'W', 1]:  # Regulation win
+        """
+        Turn outcome into a 0-1 "score" for Elo. Regulation win = 1, regulation loss = 0.
+        OT win/loss is often worth less—you didn't dominate, so we scale it down (e.g. 0.75).
+        """
+        if outcome in ['RW', 'W', 1]:
             return 1.0
-        elif outcome == 'OTW':  # Overtime win
+        elif outcome == 'OTW':
             return self.params.get('ot_win_multiplier', 0.75)
-        elif outcome == 'OTL':  # Overtime loss
+        elif outcome == 'OTL':
             return 1 - self.params.get('ot_win_multiplier', 0.75)
-        return 0.0  # Regulation loss
+        return 0.0
     
     def adjust_for_context(self, team_elo, is_home, rest_time, travel_dist, injuries):
-        """Apply contextual adjustments to ELO rating."""
+        """
+        Raw Elo isn't enough—home ice, rest, travel, injuries all matter. We bump
+        or drop the effective rating before computing expected score.
+        """
         adjusted = team_elo
-        
-        # Home advantage
+
         if is_home:
             adjusted += self.params.get('home_advantage', 0)
-        
-        # Back-to-back penalty
+
+        # Back-to-back = tired. rest_time <= 1 means they played yesterday or today
         if rest_time <= 1:
             adjusted -= self.params.get('b2b_penalty', 0)
-        
-        # Travel fatigue (15 points per 1000 miles)
+
+        # Long flight = jet lag. Only hits away teams
         if not is_home and travel_dist > 0:
             adjusted -= (travel_dist / 1000) * 15
-        
-        # Injury penalty (25 points per key injury)
-        adjusted -= injuries * 25
-        
+
+        adjusted -= injuries * 25   # Key players out = weaker
+
         return adjusted
     
     def update_ratings(self, game):
-        """Update team ratings after a game."""
+        """
+        Core Elo update: compare expected vs actual, move ratings. New teams get 1500.
+        """
         home_team = get_value(game, 'home_team')
         away_team = get_value(game, 'away_team')
-        
-        # Get base ratings (default to 1500 for new teams)
+
         home_elo = self.ratings.get(home_team, 1500)
         away_elo = self.ratings.get(away_team, 1500)
-        
-        # Get context values with flexible column name lookup
         home_rest = get_value(game, 'home_rest', 2)
         away_rest = get_value(game, 'away_rest', 2)
         travel_dist = get_value(game, 'travel_distance', 0)
         travel_time = get_value(game, 'travel_time', 0)
         home_injuries = get_value(game, 'home_injuries', 0)
         away_injuries = get_value(game, 'away_injuries', 0)
-        
-        # Use travel_time as fallback (convert hours to equivalent miles)
+
         if travel_dist == 0 and travel_time > 0:
-            travel_dist = travel_time * 60  # Rough conversion: 60 mph average
-        
-        # Apply contextual adjustments
+            travel_dist = travel_time * 60   # Assume ~60 mph if we only have hours
         home_adj = self.adjust_for_context(home_elo, True, home_rest, 0, home_injuries)
         away_adj = self.adjust_for_context(away_elo, False, away_rest, travel_dist, away_injuries)
-        
-        # Rest differential advantage
-        rest_diff = home_rest - away_rest
+
+        rest_diff = home_rest - away_rest   # Home rested more? Give them a boost
         home_adj += rest_diff * self.params.get('rest_advantage_per_day', 0)
-        
-        # Calculate expected scores
         home_expected = self.calculate_expected_score(home_adj, away_adj)
-        
-        # Handle different outcome column names
-        home_outcome = get_value(game, 'home_outcome')
-        home_win = get_value(game, 'home_win')
+        home_outcome = get_value(game, 'home_outcome')   # Sometimes it's RW, OTW, etc.
+        home_win = get_value(game, 'home_win')           # Or a simple True/False
         home_goals = get_value(game, 'home_goals', 0)
         away_goals = get_value(game, 'away_goals', 0)
-        
+
         if home_outcome is not None:
             home_actual = self.get_actual_score(home_outcome)
         elif home_win is not None:
             home_actual = 1.0 if home_win else 0.0
         else:
-            home_actual = 1.0 if home_goals > away_goals else 0.0
-        
-        # Calculate margin of victory multiplier
+            home_actual = 1.0 if home_goals > away_goals else 0.0   # Infer from goals
         goal_diff = home_goals - away_goals
         mov_mult = self.calculate_mov_multiplier(goal_diff)
-        
-        # Update ratings
+
         k = self.params.get('k_factor', 32) * mov_mult
+        # Elo formula: new = old + k * (actual - expected). Upset = big move.
         self.ratings[home_team] = home_elo + k * (home_actual - home_expected)
         self.ratings[away_team] = away_elo + k * ((1 - home_actual) - (1 - home_expected))
-        
-        # Store history
-        self.rating_history.append({
+        self.rating_history.append({   # Save a snapshot so we can inspect later
             'home_team': home_team,
             'away_team': away_team,
             'home_rating': self.ratings[home_team],
@@ -235,11 +210,14 @@ class EloModel:
         })
     
     def predict_goals(self, game):
-        """Predict goals for both teams."""
+        """
+        Turn Elo win probability into expected goals. We don't predict "3-2" exactly—
+        we give expected values like 3.1 and 2.7. Win prob 50% → 3–3. Higher → home
+        scores more.
+        """
         home_team = get_value(game, 'home_team')
         away_team = get_value(game, 'away_team')
-        
-        # Get adjusted ratings
+
         home_elo = self.ratings.get(home_team, 1500)
         away_elo = self.ratings.get(away_team, 1500)
         
@@ -250,33 +228,29 @@ class EloModel:
         travel_time = get_value(game, 'travel_time', 0)
         home_injuries = get_value(game, 'home_injuries', 0)
         away_injuries = get_value(game, 'away_injuries', 0)
-        
-        # Use travel_time as fallback
+
         if travel_dist == 0 and travel_time > 0:
             travel_dist = travel_time * 60
         
         home_adj = self.adjust_for_context(home_elo, True, home_rest, 0, home_injuries)
         away_adj = self.adjust_for_context(away_elo, False, away_rest, travel_dist, away_injuries)
-        
-        # Rest differential
+
         rest_diff = home_rest - away_rest
         home_adj += rest_diff * self.params.get('rest_advantage_per_day', 0)
-        
-        # Calculate win probability
+
         home_win_prob = self.calculate_expected_score(home_adj, away_adj)
-        
-        # Convert to expected goal differential
-        # Scale: 50% win prob = 0 goal diff, 100% = +6 goals, 0% = -6 goals
+
+        # Map win prob to goal differential: 50% → 0 diff, 100% → +6, 0% → -6
         expected_diff = (home_win_prob - 0.5) * 12
-        
-        # League average is ~3 goals per team
+
+        # League average ~3 goals/team. Split the diff between home and away.
         home_goals = 3.0 + (expected_diff / 2)
         away_goals = 3.0 - (expected_diff / 2)
         
         return home_goals, away_goals
     
     def predict_winner(self, game):
-        """Predict winner and win probability."""
+        """Who wins and how confident are we? Same logic as predict_goals, just return team + prob."""
         home_team = get_value(game, 'home_team')
         away_team = get_value(game, 'away_team')
         
@@ -308,7 +282,7 @@ class EloModel:
             return away_team, 1 - home_win_prob
     
     def _get_team_column(self, df, field):
-        """Find the correct column name for a field in a DataFrame."""
+        """Same idea as get_value but for a whole table—which column has this data?"""
         aliases = COLUMN_ALIASES.get(field, [field])
         for alias in aliases:
             if alias in df.columns:
@@ -316,31 +290,31 @@ class EloModel:
         return None
     
     def fit(self, games_df):
-        """Train the model on historical games."""
-        # Find correct column names
+        """
+        Process games in order. Start everyone at initial rating (or by division),
+        then update ratings game by game. Chronological order matters—we're
+        simulating how ratings would have evolved.
+        """
         home_col = self._get_team_column(games_df, 'home_team') or 'home_team'
         away_col = self._get_team_column(games_df, 'away_team') or 'away_team'
         div_col = self._get_team_column(games_df, 'division')
-        
-        # Initialize ratings
+
         teams = pd.concat([games_df[home_col], games_df[away_col]]).unique()
-        
+
         if div_col:
-            divisions = games_df.groupby(home_col)[div_col].first()
+            divisions = games_df.groupby(home_col)[div_col].first()   # One division per team
             self.initialize_ratings(teams, divisions)
         else:
             self.initialize_ratings(teams)
-        
-        # Update ratings game-by-game
+
         for _, game in games_df.iterrows():
             self.update_ratings(game)
-    
+
     def evaluate(self, games_df):
-        """Evaluate model on test set with comprehensive metrics.
-        
+        """
+        Predict every game, compare to actuals, spit back RMSE, MAE, R², win accuracy.
         Returns dict with:
-            home_rmse, away_rmse, combined_rmse, home_mae, away_mae,
-            home_r2, away_r2, win_accuracy, n_games
+            home_rmse, away_rmse, combined_rmse, home_mae, away_mae, home_r2, away_r2, win_accuracy, n_games
         """
         home_preds, away_preds = [], []
         home_actuals, away_actuals = [], []
@@ -355,8 +329,7 @@ class EloModel:
             away_preds.append(a_pred)
             home_actuals.append(h_actual)
             away_actuals.append(a_actual)
-            
-            # Win accuracy
+
             pred_home_win = h_pred > a_pred
             actual_home_win = h_actual > a_actual
             if pred_home_win == actual_home_win:
@@ -379,41 +352,39 @@ class EloModel:
         }
     
     def get_rankings(self, top_n=None):
-        """Get team rankings sorted by ELO rating."""
+        """Sorted list of (team, rating). top_n limits to top N if you only want that."""
         sorted_ratings = sorted(self.ratings.items(), key=lambda x: x[1], reverse=True)
         if top_n:
             return sorted_ratings[:top_n]
         return sorted_ratings
     
     def get_rating_history_df(self):
-        """Get rating history as a DataFrame."""
+        """Rating after each game—useful for plotting how teams moved over time."""
         return pd.DataFrame(self.rating_history)
     
     # ── Save / Load ──────────────────────────────────────────────
-    
+
     def save_model(self, path):
-        """Save model state (ratings, params, history) to disk.
-        
+        """
+        Dump to disk. Creates both a .pkl (exact restore) and .json (human-readable
+        so you can peek at ratings without loading Python).
         Saves two files:
             {path}.pkl  – full pickle (ratings + history + params)
             {path}.json – human-readable params + final ratings
         """
         os.makedirs(os.path.dirname(path) if os.path.dirname(path) else '.', exist_ok=True)
-        
+
         state = {
             'params': self.params,
             'ratings': self.ratings,
             'rating_history': self.rating_history,
         }
-        
-        # Pickle for exact restoration
+
         pkl_path = path if path.endswith('.pkl') else path + '.pkl'
         with open(pkl_path, 'wb') as f:
             pickle.dump(state, f)
-        
-        # JSON for human readability
         json_path = path.replace('.pkl', '') + '.json' if path.endswith('.pkl') else path + '.json'
-        json_state = {
+        json_state = {   # Floats for JSON (numpy types don't serialize nicely)
             'params': {k: (float(v) if isinstance(v, (np.floating, float)) else v)
                        for k, v in self.params.items()},
             'ratings': {k: float(v) for k, v in self.ratings.items()},
@@ -427,10 +398,7 @@ class EloModel:
     
     @classmethod
     def load_model(cls, path):
-        """Load a saved Elo model from disk.
-        
-        Returns a fully restored EloModel instance.
-        """
+        """Load from .pkl. Get back a full model—ratings, history, params—ready to predict."""
         pkl_path = path if path.endswith('.pkl') else path + '.pkl'
         with open(pkl_path, 'rb') as f:
             state = pickle.load(f)
