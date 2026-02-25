@@ -1,0 +1,65 @@
+# Baseline Elo - All settings configurable (edit this file, no coding needed)
+# =============================================================================
+
+model_name: model_baseline_elo
+description: Classic Elo (no home/MOV) for benchmarking
+
+# -----------------------------------------------------------------------------
+# DATA - which files to use
+# -----------------------------------------------------------------------------
+data:
+  csv_path: data/whl_2025.csv       # Training data (shift-level, gets aggregated)
+  matchups_path: data/WHSDSC_Rnd1_matchups.xlsx   # Round 1 matchups to predict
+
+# -----------------------------------------------------------------------------
+# VALIDATION - train/test split (adjust for quick tests)
+# -----------------------------------------------------------------------------
+validation:
+  # Train ratio: 0.7 = 70% train / 30% test. Try 0.8 for 80/20, 0.5 for 50/50
+  train_ratio: 0.7
+
+  # Number of cross-validation folds (runs). Use 1 for fast test, 3+ for robust
+  n_runs: 3
+
+# -----------------------------------------------------------------------------
+# HYPERPARAMETERS - k_factor, initial_rating, and formula constants
+# -----------------------------------------------------------------------------
+# Grid-searched (list or range):
+#   k_factor: [5, 10, 20, 32]  or  {min: 5, max: 100, step: 5}
+#   initial_rating: [1200]
+#
+# Formula constants (single values, not grid-searched):
+#   elo_scale: 400          # expected score divisor: 1/(1+10^((opp-me)/scale))
+#   league_avg_goals: 3.0   # baseline goals per team for prediction
+#   goal_diff_half_range: 6  # swing: goals = league_avg +/- this*(win_prob-0.5)
+# -----------------------------------------------------------------------------
+hyperparameters:
+  k_factor: {min: 5, max: 100, step: 5}
+  initial_rating: [1200]
+  elo_scale: 400
+  league_avg_goals: 3.0
+  goal_diff_half_range: 6.0
+
+# Defaults (used when loading a saved model)
+defaults:
+  k_factor: 5
+  initial_rating: 1200
+  elo_scale: 400
+  league_avg_goals: 3.0
+  goal_diff_half_range: 6.0
+
+# -----------------------------------------------------------------------------
+# OUTPUT - where to save results
+# -----------------------------------------------------------------------------
+output:
+  comparison_csv: output/predictions/baseline_elo/baseline_elo_comparison.csv
+  k_metrics_csv: output/predictions/baseline_elo/baseline_elo_k_metrics.csv
+  round1_csv: output/predictions/baseline_elo/round1_baseline_elo_predictions.csv
+  summary_json: output/predictions/baseline_elo/baseline_elo_pipeline_summary.json
+
+# -----------------------------------------------------------------------------
+# QUICK TEST PRESETS - copy these into validation/hyperparameters to test faster
+# -----------------------------------------------------------------------------
+# Fast (1 fold, 4 k values):  train_ratio: 0.7, n_runs: 1, k_factor: {min: 5, max: 20, step: 5}
+# Minimal:                  n_runs: 1, k_factor: [5]
+# Full run:                  train_ratio: 0.7, n_runs: 3, k_factor: {min: 5, max: 100, step: 5}

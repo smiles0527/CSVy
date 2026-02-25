@@ -13,10 +13,21 @@ All model code lives in `utils/`. Notebooks import from there.
 | `utils/baseline_model.py` | All 9 baseline classes + compare/save/load |
 | `training/train_baseline.ipynb` | Train all 17 configs, tune, predict Round 1 |
 | `validation/validate_baseline.ipynb` | 9 validation tests |
-| `tutorials/baseline_tutorial.ipynb` | Tutorial walkthrough |
 | `_run_baselines.py` | Standalone pipeline script |
 
 **Classes:** `GlobalMeanBaseline`, `TeamMeanBaseline`, `HomeAwayBaseline`, `MovingAverageBaseline`, `WeightedHistoryBaseline`, `PoissonBaseline`, `DixonColesBaseline`, `BayesianTeamBaseline`, `EnsembleBaseline`
+
+---
+
+## Baseline Elo (minimal Elo benchmark)
+
+| File | Purpose |
+|------|---------|
+| `utils/baseline_elo.py` | BaselineEloModel class (classic Elo, no home/MOV) |
+| `training/baseline_elo/train_baseline_elo.ipynb` | Train + k-grid search + Round 1 predictions |
+| `validation/validate_baseline_elo.ipynb` | Validation tests |
+| `_run_baseline_elo.py` | Standalone pipeline script |
+| `config/hyperparams/model_baseline_elo.yaml` | YAML config |
 
 ---
 
@@ -27,7 +38,6 @@ All model code lives in `utils/`. Notebooks import from there.
 | `utils/elo_model.py` | EloModel class |
 | `training/train_elo.ipynb` | Train + hyperparameter search |
 | `validation/validate_elo.ipynb` | Validation tests |
-| `tutorials/elo_tutorial.ipynb` | Tutorial |
 
 ---
 
@@ -39,7 +49,6 @@ All model code lives in `utils/`. Notebooks import from there.
 | `training/train_linear.ipynb` | Train notebook |
 | `training/linear_hyperparam_search.py` | Hyperparameter search |
 | `validation/validate_linear.ipynb` | Validation tests |
-| `tutorials/linear_tutorial.ipynb` | Tutorial |
 
 ---
 
@@ -51,7 +60,6 @@ All model code lives in `utils/`. Notebooks import from there.
 | `training/train_xgboost.ipynb` | Train notebook |
 | `training/xgboost_hyperparam_search.py` | Hyperparameter search |
 | `validation/validate_xgboost.ipynb` | Validation tests |
-| `tutorials/xgboost_tutorial.ipynb` | Tutorial |
 
 ---
 
@@ -63,7 +71,6 @@ All model code lives in `utils/`. Notebooks import from there.
 | `training/train_random_forest.ipynb` | Train notebook |
 | `training/random_forest_hyperparam_search.py` | Hyperparameter search |
 | `validation/validate_random_forest.ipynb` | Validation tests |
-| `tutorials/random_forest_tutorial.ipynb` | Tutorial |
 
 ---
 
@@ -75,7 +82,6 @@ All model code lives in `utils/`. Notebooks import from there.
 | `training/train_ensemble.ipynb` | Train notebook |
 | `training/ensemble_hyperparam_search.py` | Hyperparameter search |
 | `validation/validate_ensemble.ipynb` | Validation tests |
-| `tutorials/ensemble_tutorial.ipynb` | Tutorial |
 
 ---
 
@@ -87,7 +93,6 @@ All model code lives in `utils/`. Notebooks import from there.
 | `training/train_neural_network.ipynb` | Train notebook |
 | `training/neural_network_hyperparam_search.py` | Hyperparameter search |
 | `validation/validate_neural_network.ipynb` | Validation tests |
-| `tutorials/neural_network_tutorial.ipynb` | Tutorial |
 
 ---
 

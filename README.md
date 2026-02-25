@@ -15,13 +15,13 @@ Predict outcomes of 16 Round 1 playoff matchups for the Western Hockey Scouts Da
 python/
   utils/                  # Model source code (imports go here)
     baseline_model.py     # 9 baseline models (GlobalMean, Dixon-Coles, Bayesian, etc.)
+    baseline_elo.py       # Baseline Elo (minimal chess-style Elo)
     elo_model.py          # Dynamic Elo ratings
     hockey_features.py    # Feature engineering from shift data
     ...                   # linear, xgboost, random_forest, neural_network, ensemble
   training/               # Training notebooks (one per model)
     train_baseline.ipynb  # <-- START HERE
   validation/             # Validation test suites (one per model)
-  tutorials/              # Walkthrough tutorials (one per model)
   data/                   # WHL dataset + matchups
   output/                 # Results, predictions, saved models
   _run_baselines.py       # Standalone baseline pipeline script

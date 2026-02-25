@@ -67,6 +67,7 @@ class MatchResult:
 class EloSystem:
     k: float = 32.0
     base_elo: float = 1200.0
+    elo_scale: float = 400.0  # divisor in expected-score: 1/(1+10^((rb-ra)/scale))
     use_doc_ob_same_as_oa: bool = False
     ratings: Dict[str, float] = field(default_factory=dict)
     history: List[MatchResult] = field(default_factory=list)
@@ -84,7 +85,9 @@ class EloSystem:
         return self.ratings[team]
 
     def expected_score(self, ra: float, rb: float) -> float:
-        return 1.0 / (1.0 + 10.0 ** ((rb - ra) / 400.0))
+        if self.elo_scale <= 0:
+            return 0.5  # fallback to 50/50 to avoid division by zero
+        return 1.0 / (1.0 + 10.0 ** ((rb - ra) / self.elo_scale))
 
     def expected_scores(self, team_a: str, team_b: str) -> Tuple[float, float]:
         ra = self.get_rating(team_a)
@@ -185,8 +188,11 @@ class BaselineEloModel:
     def __init__(self, params=None):
         self.params = params or {}
         self.k = self.params.get('k_factor', 32)
-        self.base_elo = self.params.get('initial_rating', 1500)
-        self.elo = EloSystem(k=self.k, base_elo=self.base_elo)
+        self.base_elo = self.params.get('initial_rating', 1200)
+        self.elo_scale = self.params.get('elo_scale', 400)
+        self.league_avg_goals = self.params.get('league_avg_goals', 3.0)
+        self.goal_diff_half_range = self.params.get('goal_diff_half_range', 6.0)
+        self.elo = EloSystem(k=self.k, base_elo=self.base_elo, elo_scale=self.elo_scale)
         self.rating_history = []
 
     def _get_team_column(self, df, field):
@@ -207,10 +213,18 @@ class BaselineEloModel:
         for _, row in games_df.iterrows():
             ht = row[home_col]
             at = row[away_col]
+            if pd.isna(ht):
+                ht = 'Unknown_Home'
+            if pd.isna(at):
+                at = 'Unknown_Away'
             hg = row[hg_col] if hg_col in row else 0
             ag = row[ag_col] if ag_col in row else 0
+            hg = 0 if pd.isna(hg) else float(hg)
+            ag = 0 if pd.isna(ag) else float(ag)
             outcome_a = 1 if hg > ag else 0
-            matches.append((ht, at, outcome_a))
+            if ht == at:  # skip self-play
+                continue
+            matches.append((str(ht), str(at), outcome_a))
 
         self.elo.process_matches(matches)
         self.rating_history = [
@@ -226,9 +240,10 @@ class BaselineEloModel:
         home_elo = self.elo.ratings.get(home_team, self.base_elo)
         away_elo = self.elo.ratings.get(away_team, self.base_elo)
         home_win_prob = self.elo.expected_score(home_elo, away_elo)
-        expected_diff = (home_win_prob - 0.5) * 12
-        home_goals = 3.0 + (expected_diff / 2)
-        away_goals = 3.0 - (expected_diff / 2)
+        # goals = league_avg +/- (goal_diff_half_range * (win_prob - 0.5))
+        adj = self.goal_diff_half_range * (home_win_prob - 0.5)
+        home_goals = max(0.0, self.league_avg_goals + adj)
+        away_goals = max(0.0, self.league_avg_goals - adj)
         return home_goals, away_goals
 
     def predict_winner(self, game) -> Tuple[str, float]:
@@ -264,6 +279,13 @@ class BaselineEloModel:
                 correct_wins += 1
 
         n = len(home_actuals)
+        if n == 0:
+            return {
+                'home_rmse': 0.0, 'away_rmse': 0.0, 'combined_rmse': 0.0,
+                'home_mae': 0.0, 'away_mae': 0.0,
+                'home_r2': 0.0, 'away_r2': 0.0,
+                'win_accuracy': 0.0, 'n_games': 0,
+            }
         all_actuals = home_actuals + away_actuals
         all_preds = home_preds + away_preds
 
@@ -285,3 +307,26 @@ class BaselineEloModel:
         if top_n:
             return sorted_ratings[:top_n]
         return sorted_ratings
+
+    @staticmethod
+    def compute_brier_logloss(model: 'BaselineEloModel', test_df: pd.DataFrame, eps: float = 1e-10) -> Tuple[float, float]:
+        """
+        Compute Brier loss and Log loss for win probability predictions.
+        Returns (brier_mean, log_loss_mean).
+        """
+        brier_sum, logloss_sum = 0.0, 0.0
+        for _, game in test_df.iterrows():
+            home_team = get_value(game, 'home_team')
+            home_goals = get_value(game, 'home_goals', 0)
+            away_goals = get_value(game, 'away_goals', 0)
+            winner, conf = model.predict_winner(game)
+            EA = conf if winner == home_team else (1 - conf)
+            EB = 1 - EA
+            OA = 1 if home_goals > away_goals else 0
+            OB = 1 - OA
+            EA_c = np.clip(EA, eps, 1 - eps)
+            EB_c = np.clip(EB, eps, 1 - eps)
+            brier_sum += (EA - OA) ** 2
+            logloss_sum += -(OA * np.log(EA_c) + OB * np.log(EB_c))
+        n = len(test_df)
+        return (brier_sum / n if n else 0.0, logloss_sum / n if n else 0.0)

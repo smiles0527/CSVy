@@ -1,0 +1,225 @@
+import pandas as pd
+import numpy as np
+from itertools import product
+import matplotlib.pyplot as plt
+import json, os, sys, pathlib
+
+# ---------- resolve python/ directory & set CWD ----------
+_cwd = pathlib.Path(os.path.abspath('')).resolve()
+if (_cwd / 'python').is_dir():
+    _python_dir = _cwd / 'python'
+elif _cwd.name == 'baseline_elo' and (_cwd.parent.parent / 'data').is_dir():
+    _python_dir = _cwd.parent.parent
+elif _cwd.name == 'training' and (_cwd.parent / 'data').is_dir():
+    _python_dir = _cwd.parent
+elif (_cwd / 'data').is_dir():
+    _python_dir = _cwd
+else:
+    raise RuntimeError(f'Cannot locate python/ directory from {_cwd}')
+
+os.chdir(_python_dir)
+sys.path.insert(0, str(_python_dir))
+
+from utils.baseline_elo import BaselineEloModel
+
+plt.rcParams['figure.figsize'] = (12, 6)
+print(f'CWD: {os.getcwd()}')
+
+# ── Load raw shift-level CSV and aggregate to game level ──
+raw = pd.read_csv('data/whl_2025.csv')
+print(f'Raw: {len(raw)} shift rows')
+
+games_df = raw.groupby('game_id').agg(
+    home_team  = ('home_team', 'first'),
+    away_team  = ('away_team', 'first'),
+    home_goals = ('home_goals', 'sum'),
+    away_goals = ('away_goals', 'sum'),
+    went_ot    = ('went_ot', 'max'),
+).reset_index()
+
+# Sort by game_id (chronological)
+extracted = games_df['game_id'].astype(str).str.extract(r'(\\d+)')
+games_df['game_num'] = pd.to_numeric(extracted[0], errors='coerce').fillna(0).astype(int)
+games_df = games_df.sort_values('game_num').reset_index(drop=True)
+
+print(f'Games: {len(games_df)}')
+print(f'Teams: {games_df["home_team"].nunique()}')
+print(f'Avg home goals: {games_df["home_goals"].mean():.2f}, Avg away goals: {games_df["away_goals"].mean():.2f}')
+print(f'Home win rate: {(games_df["home_goals"] > games_df["away_goals"]).mean():.1%}')
+games_df.head()
+
+# 70/30 block cross-validation (3 folds)
+TRAIN_RATIO = 0.7
+N_RUNS = 3
+n_folds = N_RUNS
+fold_size = len(games_df) // n_folds
+
+def get_fold_splits(games_df, fold):
+    """Block holdout: train ~70%, test ~30%."""
+    val_start = fold * fold_size
+    val_end = val_start + fold_size
+    test_df = games_df.iloc[val_start:val_end].copy()
+    train_df = pd.concat([games_df.iloc[:val_start], games_df.iloc[val_end:]], ignore_index=True)
+    return train_df, test_df
+
+# First fold for grid search
+train_df, test_df = get_fold_splits(games_df, 0)
+print(f'70/30 block CV: {n_folds} folds, ~{len(train_df)} train / ~{len(test_df)} test per fold')
+print(f'Fold 1: Train {len(train_df)} games  |  Test {len(test_df)} games')
+
+# Baseline Elo has only k_factor and initial_rating
+param_grid = dict(
+    k_factor       = [16, 24, 32, 40, 48],
+    initial_rating = [1200, 1500],
+)
+keys = list(param_grid.keys())
+combos = list(product(*[param_grid[k] for k in keys]))
+print(f'Grid: {len(combos)} configurations')
+
+# ── Grid Search (first fold only) ──
+results = []
+
+for i, vals in enumerate(combos):
+    params = dict(zip(keys, vals))
+    label = f"BaselineElo(k={params['k_factor']},init={params['initial_rating']})"
+    try:
+        model = BaselineEloModel(params)
+        model.fit(train_df)
+        metrics = model.evaluate(test_df)
+        results.append({'config': label, **params, **metrics})
+    except Exception as e:
+        print(f'  FAILED {label}: {e}')
+
+results_df = pd.DataFrame(results).sort_values('combined_rmse')
+best_row = results_df.iloc[0]
+best_params = {
+    'k_factor': int(best_row['k_factor']),
+    'initial_rating': int(best_row['initial_rating']),
+}
+print(f'\n✅ {len(results_df)} configs evaluated on fold 1')
+print(f'Best: k={best_params["k_factor"]}, init={best_params["initial_rating"]} (combined_rmse={best_row["combined_rmse"]:.4f})')
+results_df.head(10)[['config','home_rmse','away_rmse','combined_rmse','win_accuracy']]
+
+# ── Multi-run evaluation (all folds with best params) ──
+per_run_metrics = []
+
+for fold in range(n_folds):
+    train_f, test_f = get_fold_splits(games_df, fold)
+    model = BaselineEloModel(best_params)
+    model.fit(train_f)
+    metrics = model.evaluate(test_f)
+    per_run_metrics.append({
+        'run': fold + 1,
+        'combined_rmse': metrics['combined_rmse'],
+        'win_accuracy': metrics['win_accuracy'],
+    })
+    print(f'Run {fold + 1}: combined_rmse={metrics["combined_rmse"]:.4f}, win_accuracy={metrics["win_accuracy"]:.1%}')
+
+# Aggregate
+rmse_vals = [m['combined_rmse'] for m in per_run_metrics]
+acc_vals = [m['win_accuracy'] for m in per_run_metrics]
+rmse_mean, rmse_std = np.mean(rmse_vals), np.std(rmse_vals)
+acc_mean, acc_std = np.mean(acc_vals), np.std(acc_vals)
+
+print(f'\nSummary (mean +/- std over {n_folds} runs):')
+print(f'  Combined RMSE:  {rmse_mean:.4f} +/- {rmse_std:.4f}')
+print(f'  Win Accuracy:   {acc_mean:.1%} +/- {acc_std:.1%}')
+
+# ── Train on ALL data with best params ──
+final_model = BaselineEloModel(best_params)
+final_model.fit(games_df)
+
+# Multi-run metrics for reporting (from CV above)
+final_metrics = {
+    'combined_rmse': rmse_mean, 'combined_rmse_std': rmse_std,
+    'win_accuracy': acc_mean, 'win_accuracy_std': acc_std,
+}
+
+print('Final Baseline Elo model trained on all', len(games_df), 'games')
+print(f'\nCV metrics (mean +/- std over {n_folds} runs):')
+print(f'  Combined RMSE:  {rmse_mean:.4f} +/- {rmse_std:.4f}')
+print(f'  Win Accuracy:   {acc_mean:.1%} +/- {acc_std:.1%}')
+
+print(f'\n🏆 Team Rankings (top 10):')
+for rank, (team, rating) in enumerate(final_model.get_rankings(10), 1):
+    print(f'  {rank:2d}. {team:20s}  {rating:.1f}')
+
+# ── Rating distribution visualization ──
+rankings = final_model.get_rankings()
+teams_r, ratings_r = zip(*rankings)
+
+fig, ax = plt.subplots(figsize=(12, 6))
+colors = ['#2ecc71' if r > 1500 else '#e74c3c' if r < 1500 else '#95a5a6' for r in ratings_r]
+ax.barh(range(len(teams_r)), ratings_r, color=colors, edgecolor='black', linewidth=0.3)
+ax.set_yticks(range(len(teams_r)))
+ax.set_yticklabels(teams_r, fontsize=9)
+ax.axvline(1500, color='gray', ls='--', lw=1, label='Initial (1500)')
+ax.set_xlabel('Elo Rating')
+ax.set_title('Baseline Elo Ratings — All Teams')
+ax.legend()
+ax.invert_yaxis()
+plt.tight_layout()
+plt.show()
+
+# ── Load Round 1 matchups and predict ──
+matchups = pd.read_excel('data/WHSDSC_Rnd1_matchups.xlsx')
+print(f'{len(matchups)} matchups loaded')
+
+home_col = [c for c in matchups.columns if 'home' in c.lower()][0]
+away_col = [c for c in matchups.columns if 'away' in c.lower()][0]
+
+preds = []
+for i, row in matchups.iterrows():
+    game = {'home_team': row[home_col], 'away_team': row[away_col]}
+    h_goals, a_goals = final_model.predict_goals(game)
+    winner, conf = final_model.predict_winner(game)
+    preds.append({
+        'game': i + 1,
+        'home_team': row[home_col],
+        'away_team': row[away_col],
+        'pred_home_goals': round(h_goals, 2),
+        'pred_away_goals': round(a_goals, 2),
+        'predicted_winner': winner,
+        'confidence': round(conf, 4),
+    })
+
+pred_df = pd.DataFrame(preds)
+print(f'\nRound 1 Baseline Elo Predictions:')
+print(pred_df.to_string(index=False))
+print(f'\nAvg confidence: {pred_df["confidence"].mean():.1%}')
+
+os.makedirs('output/predictions/baseline_elo', exist_ok=True)
+os.makedirs('output/models/baseline_elo', exist_ok=True)
+
+# 1. Grid search comparison CSV
+results_df.to_csv('output/predictions/baseline_elo/baseline_elo_comparison.csv', index=False)
+print('✅ output/predictions/baseline_elo/baseline_elo_comparison.csv')
+
+# 2. Round 1 predictions CSV
+pred_df.to_csv('output/predictions/baseline_elo/round1_baseline_elo_predictions.csv', index=False)
+print('✅ output/predictions/baseline_elo/round1_baseline_elo_predictions.csv')
+
+# 3. Pipeline summary JSON (with multi-run metrics)
+summary = {
+    'model': 'BaselineElo',
+    'train_ratio': TRAIN_RATIO,
+    'n_runs': n_folds,
+    'multi_run_metrics': {
+        'combined_rmse_mean': round(rmse_mean, 6),
+        'combined_rmse_std': round(rmse_std, 6),
+        'win_accuracy_mean': round(acc_mean, 6),
+        'win_accuracy_std': round(acc_std, 6),
+    },
+    'per_run_metrics': [
+        {'run': m['run'], 'combined_rmse': round(m['combined_rmse'], 6), 'win_accuracy': round(m['win_accuracy'], 6)}
+        for m in per_run_metrics
+    ],
+    'best_params': best_params,
+    'team_rankings': {team: round(r, 1) for team, r in final_model.get_rankings()},
+    'predictions': preds,
+}
+with open('output/predictions/baseline_elo/baseline_elo_pipeline_summary.json', 'w') as f:
+    json.dump(summary, f, indent=2)
+print('✅ output/predictions/baseline_elo/baseline_elo_pipeline_summary.json')
+
+print(f'\nSUMMARY: Combined RMSE {rmse_mean:.4f} +/- {rmse_std:.4f}, Win Acc {acc_mean:.1%} +/- {acc_std:.1%}')
