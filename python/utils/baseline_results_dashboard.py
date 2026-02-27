@@ -38,6 +38,7 @@ QOL_CSS = """
 .section-nav a { margin-right: 1em; font-size: 0.9em; color: #06c; }
 .section-nav a:hover { text-decoration: underline; }
 #toast { position: fixed; bottom: 1em; right: 1em; padding: 0.5em 1em; background: #333; color: #fff; border-radius: 4px; font-size: 0.9em; z-index: 1000; display: none; }
+.table-scroll { max-height: 70vh; overflow-y: auto; margin: 0.5em 0; }
 """
 
 QOL_JS = """
@@ -581,7 +582,7 @@ class BaselineResultsDashboard:
         if combined:
             sweep_df = pd.concat(combined, ignore_index=True)
             cols = [c for c in ["pipeline", "model_iteration", "k", "config", "win_accuracy", "brier_loss", "log_loss", "combined_rmse"] if c in sweep_df.columns]
-            parts.append(f"<h3>K-Sweep</h3>{self._wrap_table(sweep_df[cols].to_html(index=False))}")
+            parts.append(f"<h3>K-Sweep ({len(sweep_df)} rows)</h3><div class='table-scroll'>{self._wrap_table(sweep_df[cols].to_html(index=False, max_rows=None))}</div>")
         return "".join(parts)
 
     def _section_validation(self, xg_only: bool = False, iteration: Optional[str] = None) -> str:
