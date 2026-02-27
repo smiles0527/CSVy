@@ -581,6 +581,9 @@ class BaselineResultsDashboard:
             combined.append(df)
         if combined:
             sweep_df = pd.concat(combined, ignore_index=True)
+            sort_cols = [c for c in ["pipeline", "model_iteration", "k"] if c in sweep_df.columns]
+            if sort_cols:
+                sweep_df = sweep_df.sort_values(sort_cols)
             cols = [c for c in ["pipeline", "model_iteration", "k", "config", "win_accuracy", "brier_loss", "log_loss", "combined_rmse"] if c in sweep_df.columns]
             parts.append(f"<h3>K-Sweep ({len(sweep_df)} rows)</h3><div class='table-scroll'>{self._wrap_table(sweep_df[cols].to_html(index=False, max_rows=None))}</div>")
         return "".join(parts)
