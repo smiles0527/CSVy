@@ -662,13 +662,18 @@ class BaselineResultsDashboard:
         tr_goals = (self.goals_summary or {}).get("team_rankings") or {}
         tr_xg = (self.xg_summary or {}).get("team_rankings") or {}
         has_both = tr_goals and tr_xg and not xg_only and not iteration
+        use_xg_for_single = xg_only or iteration == "1.1"
 
         rows = []
         for t in teams:
             t_lower = t.lower().replace(" ", "_")
             r_g, rat_g = _rank_and_rating(tr_goals, t, t_lower)
             r_x, rat_x = _rank_and_rating(tr_xg, t, t_lower)
-            sort_rank = r_g if tr_goals else (r_x if tr_xg else 999)
+            if has_both:
+                sort_rank = r_g
+            else:
+                use_r = r_x if use_xg_for_single and tr_xg else r_g
+                sort_rank = use_r if (tr_xg if use_xg_for_single else tr_goals) else 999
             if has_both:
                 rows.append({
                     "Team": t,
@@ -677,10 +682,12 @@ class BaselineResultsDashboard:
                     "_sort": sort_rank,
                 })
             else:
+                use_r = r_x if (use_xg_for_single and tr_xg) else r_g
+                use_rat = rat_x if (use_xg_for_single and tr_xg) else rat_g
                 rows.append({
                     "Team": t,
-                    "Rank": r_g if tr_goals else r_x,
-                    "Rating": rat_g if tr_goals else rat_x,
+                    "Rank": use_r,
+                    "Rating": use_rat,
                     "_sort": sort_rank,
                 })
         df = pd.DataFrame(rows)
