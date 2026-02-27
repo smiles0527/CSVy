@@ -19,6 +19,9 @@ from pathlib import Path
 DASHBOARDS = [
     ("output/predictions/baseline_dashboard.html", "docs/dashboards/baseline.html"),
     ("output/predictions/baseline_elo_xg_dashboard.html", "docs/dashboards/baseline_elo_xg.html"),
+    ("output/predictions/baseline_elo_1_0_dashboard.html", "docs/dashboards/baseline_elo_1_0.html"),
+    ("output/predictions/baseline_elo_1_1_dashboard.html", "docs/dashboards/baseline_elo_1_1.html"),
+    ("output/predictions/baseline_elo_2_0_dashboard.html", "docs/dashboards/baseline_elo_2_0.html"),
 ]
 
 

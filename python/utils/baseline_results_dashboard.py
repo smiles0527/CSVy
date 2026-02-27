@@ -25,6 +25,84 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# QoL: Copy buttons, download, section nav
+QOL_CSS = """
+.data-toolbar { display: flex; gap: 0.5rem; align-items: center; margin: 0.5em 0; flex-wrap: wrap; }
+.data-toolbar button, .data-toolbar a.btn { padding: 0.35em 0.7em; font-size: 0.85em; cursor: pointer; border: 1px solid #888; border-radius: 4px; background: #f8f8f8; }
+.data-toolbar button:hover, .data-toolbar a.btn:hover { background: #eee; }
+.table-wrap { position: relative; margin: 0.5em 0; }
+.table-wrap .copy-btn { position: absolute; top: 4px; right: 4px; padding: 0.25em 0.5em; font-size: 0.8em; cursor: pointer; background: #e8e8e8; border: 1px solid #ccc; border-radius: 3px; }
+.table-wrap .copy-btn:hover { background: #ddd; }
+.table-wrap .copy-btn.copied { background: #8f8; }
+.section-nav { position: sticky; top: 0; background: #fff; padding: 0.5em 0; border-bottom: 1px solid #ddd; margin-bottom: 1em; z-index: 10; }
+.section-nav a { margin-right: 1em; font-size: 0.9em; color: #06c; }
+.section-nav a:hover { text-decoration: underline; }
+#toast { position: fixed; bottom: 1em; right: 1em; padding: 0.5em 1em; background: #333; color: #fff; border-radius: 4px; font-size: 0.9em; z-index: 1000; display: none; }
+"""
+
+QOL_JS = """
+function copyTableTSV(btn) {
+  var tbl = btn.closest('.table-wrap').querySelector('table');
+  var rows = tbl.querySelectorAll('tr');
+  var lines = [];
+  for (var i = 0; i < rows.length; i++) {
+    var cells = rows[i].querySelectorAll('th, td');
+    lines.push(Array.from(cells).map(function(c){ return c.textContent.trim(); }).join('\\t'));
+  }
+  var tsv = lines.join('\\n');
+  navigator.clipboard.writeText(tsv).then(function(){
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(function(){ btn.textContent = 'Copy TSV'; btn.classList.remove('copied'); }, 1500);
+  });
+}
+
+function showToast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(function(){ el.style.display = 'none'; }, 2000);
+}
+
+function downloadCSV(data, filename) {
+  var blob = new Blob([data], {type: 'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.copy-btn').forEach(function(btn){
+    btn.onclick = function(){ copyTableTSV(btn); };
+  });
+  var kData = document.getElementById('k-metrics-data');
+  if (kData) {
+    var data = JSON.parse(kData.textContent);
+    Object.keys(data).forEach(function(key){
+      var btn = document.getElementById('dl-' + key);
+      if (btn) {
+        btn.onclick = function(){
+          var df = data[key];
+          if (!df || df.length === 0) return;
+          var cols = Object.keys(df[0]);
+          var csv = cols.join(',') + '\\n' + df.map(function(r){
+            return cols.map(function(c){
+              var v = r[c];
+              if (v == null) return '';
+              return typeof v === 'number' ? String(v) : '"' + String(v).replace(/"/g,'""') + '"';
+            }).join(',');
+          }).join('\\n');
+          downloadCSV(csv, key + '.csv');
+          showToast('Downloaded ' + key + '.csv');
+        };
+      }
+    });
+  }
+});
+"""
+
 # Visualization imports
 try:
     import plotly.graph_objects as go
@@ -205,13 +283,66 @@ class BaselineResultsDashboard:
             return df.rename(columns={"k_factor": "k"})
         return df
 
-    def create_figure(self, xg_only: bool = False) -> Optional[Any]:
-        """Create Plotly figure with goals vs xG comparison (all iterations 1.0, 1.1, 2.0)."""
+    def _wrap_table(self, html: str) -> str:
+        """Wrap table in div with Copy TSV button for Vernier/Excel paste."""
+        if "<table" not in html:
+            return html
+        return f'<div class="table-wrap"><button class="copy-btn">Copy TSV</button>{html}</div>'
+
+    def _df_to_records(self, df: pd.DataFrame) -> List[Dict]:
+        """Convert DataFrame to list of dicts for JSON embedding (handles NaN)."""
+        return json.loads(df.to_json(orient="records", date_format="iso", default_handler=str))
+
+    def _section_nav(self) -> str:
+        """Sticky nav with jump links for quick navigation."""
+        return """<nav class="section-nav">
+<a href="#overview">Overview</a>
+<a href="#hyperparams">Hyperparameters</a>
+<a href="#k-metrics">K vs Metrics</a>
+<a href="#validation">Validation</a>
+<a href="#calibration">Calibration</a>
+<a href="#rankings">Rankings</a>
+<a href="#round1">Round 1</a>
+<span style="color:#666;font-size:0.85em;margin-left:1em">Tip: Copy TSV → paste in Vernier/Excel</span>
+</nav>"""
+
+    def _build_k_metrics_json(self, xg_only: bool = False, iteration: Optional[str] = None) -> Dict[str, List[Dict]]:
+        """Build k_metrics data for CSV download (Vernier-friendly)."""
+        out: Dict[str, List[Dict]] = {}
+        goals_df = None if xg_only else (self.goals_k_metrics_full if self.goals_k_metrics_full is not None else self.goals_k_metrics)
+        if goals_df is not None and len(goals_df) > 0:
+            if iteration and "model_iteration" in goals_df.columns:
+                goals_df = goals_df[goals_df["model_iteration"].astype(str) == str(iteration)]
+            if len(goals_df) > 0:
+                gdf = self._ensure_k_column(goals_df).sort_values("k" if "k" in goals_df.columns else "k_factor")
+                out["k_metrics_goals"] = self._df_to_records(gdf)
+        if self.xg_k_metrics is not None and len(self.xg_k_metrics) > 0 and not iteration:
+            xdf = self._ensure_k_column(self.xg_k_metrics).sort_values("k" if "k" in self.xg_k_metrics.columns else "k_factor")
+            out["k_metrics_xg"] = self._df_to_records(xdf)
+        return out
+
+    def _k_metrics_download_section(self, k_metrics_data: Dict[str, List[Dict]]) -> str:
+        """Download buttons for k_metrics CSV (Vernier, Excel)."""
+        parts = ['<div class="data-toolbar">']
+        for key in k_metrics_data:
+            if k_metrics_data[key]:
+                safe_key = key.replace(" ", "_")
+                parts.append(f'<button class="btn" id="dl-{safe_key}">Download {key}.csv</button>')
+        parts.append("</div>")
+        return "".join(parts)
+
+    def create_figure(self, xg_only: bool = False, iteration: Optional[str] = None) -> Optional[Any]:
+        """Create Plotly figure with goals vs xG comparison (all iterations 1.0, 1.1, 2.0).
+        If iteration is '1.0', '1.1', or '2.0', show only that iteration's data."""
         if not PLOTLY_AVAILABLE:
             logger.warning("Plotly not available for BaselineResultsDashboard")
             return None
 
         goals_df = None if xg_only else (self.goals_k_metrics_full if self.goals_k_metrics_full is not None else self.goals_k_metrics)
+        if goals_df is not None and iteration and "model_iteration" in goals_df.columns:
+            goals_df = goals_df[goals_df["model_iteration"].astype(str) == str(iteration)].copy()
+        if goals_df is not None and len(goals_df) == 0:
+            goals_df = None
         has_goals = goals_df is not None and len(goals_df) > 0
         has_xg = self.xg_k_metrics is not None and len(self.xg_k_metrics) > 0
         if not has_goals and not has_xg:
@@ -254,11 +385,12 @@ class BaselineResultsDashboard:
                             continue
                         gdf = self._ensure_k_column(sub)
                         k_col = "k" if "k" in gdf.columns else "k_factor"
+                        gdf = gdf.sort_values(k_col)
                         label = {"1.0": "Goals (1.0)", "1.1": "xG (1.1)", "2.0": "Off/Def (2.0)"}.get(it, it)
                         fig.add_trace(
                             go.Scatter(
-                                x=gdf[k_col],
-                                y=gdf[metric],
+                                x=gdf[k_col].tolist(),
+                                y=gdf[metric].tolist(),
                                 name=label,
                                 mode="lines+markers",
                                 line=dict(color=colors.get(it, "#333")),
@@ -266,39 +398,39 @@ class BaselineResultsDashboard:
                             row=row, col=col,
                         )
                 else:
-                    gdf = self._ensure_k_column(goals_df)
+                    gdf = self._ensure_k_column(goals_df).sort_values("k" if "k" in goals_df.columns else "k_factor")
                     k_col = "k" if "k" in gdf.columns else "k_factor"
                     fig.add_trace(
                         go.Scatter(
-                            x=gdf[k_col],
-                            y=gdf[metric],
+                            x=gdf[k_col].tolist(),
+                            y=gdf[metric].tolist(),
                             name="Goals",
                             mode="lines+markers",
                             line=dict(color="#1f77b4"),
                         ),
                         row=row, col=col,
                     )
-            goals_has_iter = goals_df is not None and "model_iteration" in goals_df.columns
-            if has_xg and self.xg_k_metrics is not None and metric in self.xg_k_metrics.columns and not goals_has_iter:
-                xdf = self._ensure_k_column(self.xg_k_metrics)
+            goals_has_iter = goals_df is not None and "model_iteration" in goals_df.columns and not iteration
+            if has_xg and self.xg_k_metrics is not None and metric in self.xg_k_metrics.columns and not goals_has_iter and not iteration:
+                xdf = self._ensure_k_column(self.xg_k_metrics).sort_values("k" if "k" in self.xg_k_metrics.columns else "k_factor")
                 k_col = "k" if "k" in xdf.columns else "k_factor"
                 fig.add_trace(
                     go.Scatter(
-                        x=xdf[k_col],
-                        y=xdf[metric],
+                        x=xdf[k_col].tolist(),
+                        y=xdf[metric].tolist(),
                         name="xG",
                         mode="lines+markers",
                         line=dict(color="#ff7f0e"),
                     ),
                     row=row, col=col,
                 )
-            elif has_xg and self.xg_k_metrics is not None and metric in self.xg_k_metrics.columns and goals_has_iter:
-                xdf = self._ensure_k_column(self.xg_k_metrics)
+            elif has_xg and self.xg_k_metrics is not None and metric in self.xg_k_metrics.columns and goals_has_iter and not iteration:
+                xdf = self._ensure_k_column(self.xg_k_metrics).sort_values("k" if "k" in self.xg_k_metrics.columns else "k_factor")
                 k_col = "k" if "k" in xdf.columns else "k_factor"
                 fig.add_trace(
                     go.Scatter(
-                        x=xdf[k_col],
-                        y=xdf[metric],
+                        x=xdf[k_col].tolist(),
+                        y=xdf[metric].tolist(),
                         name="xG-standalone",
                         mode="lines+markers",
                         line=dict(color="#d62728"),
@@ -312,23 +444,45 @@ class BaselineResultsDashboard:
             showlegend=True,
         )
         fig.update_xaxes(title_text="k")
+        k_min, k_max = None, None
+        for df in [goals_df, self.xg_k_metrics]:
+            if df is None or len(df) == 0:
+                continue
+            gdf = self._ensure_k_column(df)
+            k_col = "k" if "k" in gdf.columns else "k_factor"
+            if k_col in gdf.columns:
+                km = float(gdf[k_col].min())
+                kx = float(gdf[k_col].max())
+                k_min = km if k_min is None else min(k_min, km)
+                k_max = kx if k_max is None else max(k_max, kx)
         for idx, metric in enumerate(available):
             row, col = idx // n_cols + 1, idx % n_cols + 1
+            if k_min is not None and k_max is not None:
+                pad = max(0.5, (k_max - k_min) * 0.02)
+                fig.update_xaxes(range=[k_min - pad, k_max + pad], row=row, col=col)
             if metric == "accuracy":
                 fig.update_yaxes(range=[0, 1.05], row=row, col=col)
             elif metric == "combined_rmse":
                 fig.update_yaxes(rangemode="tozero", row=row, col=col)
         return fig
 
-    def create_calibration_figure(self, xg_only: bool = False) -> Optional[Any]:
+    def create_calibration_figure(self, xg_only: bool = False, iteration: Optional[str] = None) -> Optional[Any]:
         """Create Plotly reliability diagram from calibration_stats."""
         if not PLOTLY_AVAILABLE:
             return None
         cal_list = []
-        if not xg_only and self.goals_calibration is not None and len(self.goals_calibration) > 0:
-            cal_list.append(("Goals", self.goals_calibration))
-        if self.xg_calibration is not None and len(self.xg_calibration) > 0:
-            cal_list.append(("xG", self.xg_calibration))
+        if xg_only:
+            if self.xg_calibration is not None and len(self.xg_calibration) > 0:
+                cal_list.append(("xG", self.xg_calibration))
+        elif iteration:
+            if self.goals_calibration is not None and len(self.goals_calibration) > 0:
+                lab = {"1.0": "Goals", "1.1": "xG", "2.0": "Off/Def"}.get(iteration, iteration)
+                cal_list.append((lab, self.goals_calibration))
+        else:
+            if self.goals_calibration is not None and len(self.goals_calibration) > 0:
+                cal_list.append(("Goals", self.goals_calibration))
+            if self.xg_calibration is not None and len(self.xg_calibration) > 0:
+                cal_list.append(("xG", self.xg_calibration))
         if not cal_list:
             return None
 
@@ -357,47 +511,68 @@ class BaselineResultsDashboard:
             fig.update_yaxes(title_text="Actual rate", range=[0, 1], scaleanchor="x", scaleratio=1, row=1, col=c)
         return fig
 
-    def _section_overview(self, xg_only: bool = False) -> str:
+    def _section_overview(self, xg_only: bool = False, iteration: Optional[str] = None) -> str:
         """Overview: best k, key metrics, output paths."""
         parts = []
-        if not xg_only and self.goals_summary:
-            bp = self.goals_summary.get("best_params", {})
-            best_k = bp.get("k_factor", self.goals_summary.get("best_k", "?"))
-            parts.append(f"<p><b>Goals</b>: best k={best_k} | {self.base_dir / 'baseline_elo'}</p>")
-        if self.xg_summary:
+        if not xg_only and self.goals_summary and (iteration is None or iteration in ("1.0", "1.1", "2.0")):
+            labels = {"1.0": "Goals", "1.1": "xG", "2.0": "Off/Def"}
+            lab = labels.get(iteration) if iteration else "Goals"
+            if iteration and self.goals_sweep_comparison is not None and "model_iteration" in self.goals_sweep_comparison.columns:
+                sub = self.goals_sweep_comparison[self.goals_sweep_comparison["model_iteration"].astype(str) == str(iteration)]
+                if len(sub) > 0 and "combined_rmse" in sub.columns:
+                    best_row = sub.loc[sub["combined_rmse"].idxmin()]
+                    best_k = best_row.get("k", best_row.get("k_factor", "?"))
+                else:
+                    best_k = self.goals_summary.get("best_params", {}).get("k_factor", "?")
+            else:
+                best_k = self.goals_summary.get("best_params", {}).get("k_factor", self.goals_summary.get("best_k", "?"))
+            parts.append(f"<p><b>{lab}</b>: best k={best_k} | {self.base_dir / 'baseline_elo'}</p>")
+        if self.xg_summary and not iteration:
             bp = self.xg_summary.get("best_params", {})
             best_k = bp.get("k_factor", self.xg_summary.get("best_k", "?"))
             parts.append(f"<p><b>xG</b>: best k={best_k} | {self.base_dir / 'baseline_elo_xg'}</p>")
-        if not xg_only and self.goals_val_comparison is not None and len(self.goals_val_comparison) > 0:
+        if not xg_only and self.goals_val_comparison is not None and len(self.goals_val_comparison) > 0 and not iteration:
             r = self.goals_val_comparison.iloc[0]
             parts.append(f"<p>Goals best: acc={r.get('win_accuracy', 0):.1%} brier={r.get('brier_loss', 0):.4f}</p>")
-        if self.xg_val_comparison is not None and len(self.xg_val_comparison) > 0:
+        if iteration:
+            lab = {"1.0": "Goals", "1.1": "xG", "2.0": "Off/Def"}.get(iteration, iteration)
+            parts.append(f"<p>{lab} (iteration {iteration})</p>")
+        if self.xg_val_comparison is not None and len(self.xg_val_comparison) > 0 and not iteration:
             r = self.xg_val_comparison.iloc[0]
             parts.append(f"<p>xG best: acc={r.get('win_accuracy', 0):.1%} brier={r.get('brier_loss', 0):.4f}</p>")
-        return "<h2>Overview</h2>" + ("".join(parts) if parts else "<p>No data.</p>")
+        return '<h2 id="overview">Overview</h2>' + ("".join(parts) if parts else "<p>No data.</p>")
 
-    def _section_hyperparams(self, xg_only: bool = False) -> str:
+    def _section_hyperparams(self, xg_only: bool = False, iteration: Optional[str] = None) -> str:
         """Hyperparameter comparison: best params table, full sweep table."""
-        parts = ["<h2>Hyperparameters</h2>"]
-        if (not xg_only and self.goals_summary) or self.xg_summary:
+        parts = ['<h2 id="hyperparams">Hyperparameters</h2>']
+        if (not xg_only and self.goals_summary) or (self.xg_summary and not iteration):
             rows = []
             if not xg_only and self.goals_summary:
+                lab = {"1.0": "Goals", "1.1": "xG", "2.0": "Off/Def"}.get(iteration) if iteration else "Goals"
                 bp = self.goals_summary.get("best_params", {})
-                rows.append({"Pipeline": "Goals", **{k: v for k, v in bp.items()}})
-            if self.xg_summary:
+                if iteration and self.goals_sweep_comparison is not None and "model_iteration" in self.goals_sweep_comparison.columns:
+                    sub = self.goals_sweep_comparison[self.goals_sweep_comparison["model_iteration"].astype(str) == str(iteration)]
+                    if len(sub) > 0 and "combined_rmse" in sub.columns:
+                        best_row = sub.loc[sub["combined_rmse"].idxmin()]
+                        bp = {k: best_row[k] for k in ["k", "win_accuracy", "brier_loss", "combined_rmse"] if k in best_row}
+                rows.append({"Pipeline": lab, **{k: v for k, v in bp.items()}})
+            if self.xg_summary and not iteration:
                 bp = self.xg_summary.get("best_params", {})
                 rows.append({"Pipeline": "xG", **{k: v for k, v in bp.items()}})
             if rows:
                 df = pd.DataFrame(rows)
-                parts.append(f"<h3>Params</h3>{df.to_html(index=False)}")
+                parts.append(f"<h3>Params</h3>{self._wrap_table(df.to_html(index=False))}")
         combined = []
         if not xg_only and self.goals_sweep_comparison is not None and len(self.goals_sweep_comparison) > 0:
             df = self.goals_sweep_comparison.copy()
-            df["pipeline"] = "goals"
-            if "model_iteration" in df.columns:
-                df["config"] = df["model_iteration"].astype(str) + "(k=" + df["k"].astype(str) + ")"
-            combined.append(df)
-        if self.xg_sweep_comparison is not None and len(self.xg_sweep_comparison) > 0:
+            if iteration and "model_iteration" in df.columns:
+                df = df[df["model_iteration"].astype(str) == str(iteration)]
+            if len(df) > 0:
+                df["pipeline"] = "goals" if not iteration else {"1.0": "Goals", "1.1": "xG", "2.0": "Off/Def"}.get(iteration, iteration)
+                if "model_iteration" in df.columns:
+                    df["config"] = df["model_iteration"].astype(str) + "(k=" + df["k"].astype(str) + ")"
+                combined.append(df)
+        if self.xg_sweep_comparison is not None and len(self.xg_sweep_comparison) > 0 and not iteration:
             df = self.xg_sweep_comparison.copy()
             df["pipeline"] = "xG"
             if "model_iteration" not in df.columns:
@@ -406,55 +581,91 @@ class BaselineResultsDashboard:
         if combined:
             sweep_df = pd.concat(combined, ignore_index=True)
             cols = [c for c in ["pipeline", "model_iteration", "k", "config", "win_accuracy", "brier_loss", "log_loss", "combined_rmse"] if c in sweep_df.columns]
-            parts.append(f"<h3>K-Sweep</h3>{sweep_df[cols].to_html(index=False)}")
+            parts.append(f"<h3>K-Sweep</h3>{self._wrap_table(sweep_df[cols].to_html(index=False))}")
         return "".join(parts)
 
-    def _section_validation(self, xg_only: bool = False) -> str:
+    def _section_validation(self, xg_only: bool = False, iteration: Optional[str] = None) -> str:
         """Validation: baselines, significance, comparison, elo vs standings."""
-        parts = ["<h2>Validation</h2>"]
+        parts = ['<h2 id="validation">Validation</h2>']
         if not xg_only and self.goals_baselines is not None:
-            parts.append(f"<h3>Baselines (Goals)</h3>{self.goals_baselines.to_html(index=False)}")
-        if self.xg_baselines is not None:
-            parts.append(f"<h3>Baselines (xG)</h3>{self.xg_baselines.to_html(index=False)}")
+            parts.append(f"<h3>Baselines (Goals)</h3>{self._wrap_table(self.goals_baselines.to_html(index=False))}")
+        if self.xg_baselines is not None and not iteration:
+            parts.append(f"<h3>Baselines (xG)</h3>{self._wrap_table(self.xg_baselines.to_html(index=False))}")
         if not xg_only and self.goals_significance is not None:
             df = self.goals_significance.copy()
             df["significant"] = df["p_value"] < 0.05
-            parts.append(f"<h3>Significance (Goals)</h3>{df.to_html(index=False)}")
-        if self.xg_significance is not None:
+            parts.append(f"<h3>Significance (Goals)</h3>{self._wrap_table(df.to_html(index=False))}")
+        if self.xg_significance is not None and not iteration:
             df = self.xg_significance.copy()
             df["significant"] = df["p_value"] < 0.05
-            parts.append(f"<h3>Significance (xG)</h3>{df.to_html(index=False)}")
+            parts.append(f"<h3>Significance (xG)</h3>{self._wrap_table(df.to_html(index=False))}")
         if not xg_only and self.goals_val_comparison is not None:
-            parts.append(f"<h3>Elo vs Baselines (Goals)</h3>{self.goals_val_comparison.to_html(index=False)}")
-        if self.xg_val_comparison is not None:
-            parts.append(f"<h3>Elo vs Baselines (xG)</h3>{self.xg_val_comparison.to_html(index=False)}")
+            parts.append(f"<h3>Elo vs Baselines (Goals)</h3>{self._wrap_table(self.goals_val_comparison.to_html(index=False))}")
+        if self.xg_val_comparison is not None and not iteration:
+            parts.append(f"<h3>Elo vs Baselines (xG)</h3>{self._wrap_table(self.xg_val_comparison.to_html(index=False))}")
         if not xg_only and self.goals_elo_vs_standings is not None:
-            parts.append(f"<h3>Elo vs Standings (Goals)</h3>{self.goals_elo_vs_standings.to_html(index=False)}")
-        if self.xg_elo_vs_standings is not None:
-            parts.append(f"<h3>Elo vs Standings (xG)</h3>{self.xg_elo_vs_standings.to_html(index=False)}")
+            parts.append(f"<h3>Elo vs Standings (Goals)</h3>{self._wrap_table(self.goals_elo_vs_standings.to_html(index=False))}")
+        if self.xg_elo_vs_standings is not None and not iteration:
+            parts.append(f"<h3>Elo vs Standings (xG)</h3>{self._wrap_table(self.xg_elo_vs_standings.to_html(index=False))}")
         return "".join(parts) if len(parts) > 1 else parts[0]
 
-    def _section_rankings(self, xg_only: bool = False) -> str:
+    def _section_rankings(self, xg_only: bool = False, iteration: Optional[str] = None) -> str:
         """Team rankings: all teams side-by-side with rank."""
-        parts = ["<h2>Rankings</h2><div style='display:flex;gap:2em'>"]
+        parts = ['<h2 id="rankings">Rankings</h2><div style="display:flex;gap:2em">']
+        lab = {"1.0": "Goals", "1.1": "xG", "2.0": "Off/Def"}.get(iteration) if iteration else "Goals"
         if not xg_only and self.goals_summary and "team_rankings" in self.goals_summary:
             tr = self.goals_summary["team_rankings"]
             ranked = sorted(tr.items(), key=lambda x: -x[1])
             n = len(ranked)
-            parts.append(f"<div><h3>Goals ({n} teams)</h3><table><tr><th>Rank</th><th>Team</th><th>Rating</th></tr>")
+            tbl = "<table><tr><th>Rank</th><th>Team</th><th>Rating</th></tr>"
             for i, (t, r) in enumerate(ranked, 1):
-                parts.append(f"<tr><td>{i}</td><td>{t}</td><td>{r:.1f}</td></tr>")
-            parts.append("</table></div>")
-        if self.xg_summary and "team_rankings" in self.xg_summary:
+                tbl += f"<tr><td>{i}</td><td>{t}</td><td>{r:.1f}</td></tr>"
+            tbl += "</table>"
+            parts.append(f'<div><h3>{lab} ({n} teams)</h3>{self._wrap_table(tbl)}</div>')
+        if self.xg_summary and "team_rankings" in self.xg_summary and not iteration:
             tr = self.xg_summary["team_rankings"]
             ranked = sorted(tr.items(), key=lambda x: -x[1])
             n = len(ranked)
-            parts.append(f"<div><h3>xG ({n} teams)</h3><table><tr><th>Rank</th><th>Team</th><th>Rating</th></tr>")
+            tbl = "<table><tr><th>Rank</th><th>Team</th><th>Rating</th></tr>"
             for i, (t, r) in enumerate(ranked, 1):
-                parts.append(f"<tr><td>{i}</td><td>{t}</td><td>{r:.1f}</td></tr>")
-            parts.append("</table></div>")
+                tbl += f"<tr><td>{i}</td><td>{t}</td><td>{r:.1f}</td></tr>"
+            tbl += "</table>"
+            parts.append(f'<div><h3>xG ({n} teams)</h3>{self._wrap_table(tbl)}</div>')
         parts.append("</div>")
         return "".join(parts)
+
+    def _section_all_teams(self, r1: pd.DataFrame) -> str:
+        """List every team in Round 1 with rank, so user can verify all teams are present."""
+        home_col = "home_team" if "home_team" in r1.columns else "home"
+        away_col = "away_team" if "away_team" in r1.columns else "away"
+        if home_col not in r1.columns or away_col not in r1.columns:
+            return ""
+        teams = set()
+        for _, row in r1.iterrows():
+            h = str(row[home_col]).strip() if pd.notna(row[home_col]) else ""
+            a = str(row[away_col]).strip() if pd.notna(row[away_col]) else ""
+            if h:
+                teams.add(h)
+            if a:
+                teams.add(a)
+        if not teams:
+            return ""
+        teams_sorted = sorted(teams)
+        tr = {}
+        if self.goals_summary and "team_rankings" in self.goals_summary:
+            tr = self.goals_summary["team_rankings"]
+        rows = []
+        for t in teams_sorted:
+            t_lower = t.lower().replace(" ", "_")
+            rank = None
+            rating = tr.get(t_lower) or tr.get(t)
+            if rating is not None:
+                ranked_list = sorted(tr.items(), key=lambda x: -x[1])
+                rank = next((i + 1 for i, (k, _) in enumerate(ranked_list) if k == t_lower or k == t), None)
+            rows.append({"Team": t, "Rank": rank if rank else "—", "Rating": f"{rating:.1f}" if rating is not None else "—"})
+        df = pd.DataFrame(rows)
+        n = len(teams_sorted)
+        return f'<h3>All teams in Round 1 ({n})</h3>{self._wrap_table(df.to_html(index=False))}'
 
     def create_r1_comparison_table(self) -> Optional[pd.DataFrame]:
         """Merge Round 1 predictions from goals and xG for side-by-side comparison."""
@@ -503,32 +714,39 @@ class BaselineResultsDashboard:
             return merged
         return pd.concat([g, x], axis=1)
 
-    def save_html(self, path: str, xg_only: bool = False) -> bool:
-        """Save comprehensive interactive HTML dashboard. If xg_only, show only xG pipeline content."""
-        fig = self.create_figure(xg_only=xg_only)
+    def save_html(self, path: str, xg_only: bool = False, iteration: Optional[str] = None) -> bool:
+        """Save comprehensive interactive HTML dashboard. If xg_only, show only xG pipeline content.
+        If iteration is '1.0', '1.1', or '2.0', show only that iteration's data from the unified sweep."""
+        fig = self.create_figure(xg_only=xg_only, iteration=iteration)
         if fig is None:
             return False
 
         out = Path(path)
         out.parent.mkdir(parents=True, exist_ok=True)
 
+        k_metrics_data = self._build_k_metrics_json(xg_only=xg_only, iteration=iteration)
+        k_download_html = self._k_metrics_download_section(k_metrics_data) if k_metrics_data else ""
+
         sections = []
-        sections.append(self._section_overview(xg_only=xg_only))
-        sections.append(self._section_hyperparams(xg_only=xg_only))
-        sections.append("<h2>K vs Metrics</h2>" + fig.to_html(full_html=False, include_plotlyjs=False))
-        sections.append(self._section_validation(xg_only=xg_only))
+        sections.append(self._section_nav())
+        sections.append(self._section_overview(xg_only=xg_only, iteration=iteration))
+        sections.append(self._section_hyperparams(xg_only=xg_only, iteration=iteration))
+        sections.append(f'<h2 id="k-metrics">K vs Metrics</h2>{k_download_html}' + fig.to_html(full_html=False, include_plotlyjs=False))
+        sections.append(self._section_validation(xg_only=xg_only, iteration=iteration))
 
-        cal_fig = self.create_calibration_figure(xg_only=xg_only)
+        cal_fig = self.create_calibration_figure(xg_only=xg_only, iteration=iteration)
         if cal_fig is not None:
-            sections.append("<h2>Calibration</h2>" + cal_fig.to_html(full_html=False, include_plotlyjs=False))
+            sections.append('<h2 id="calibration">Calibration</h2>' + cal_fig.to_html(full_html=False, include_plotlyjs=False))
 
-        sections.append(self._section_rankings(xg_only=xg_only))
+        sections.append(self._section_rankings(xg_only=xg_only, iteration=iteration))
 
         r1 = self.create_r1_comparison_table()
         if r1 is not None and len(r1) > 0:
-            sections.append(f"<h2>Round 1</h2>{r1.to_html(classes='table', index=False)}")
+            all_teams_html = self._section_all_teams(r1)
+            sections.append(f'<h2 id="round1">Round 1</h2>{all_teams_html}{self._wrap_table(r1.to_html(classes="table", index=False))}')
 
-        title = "Baseline Elo xG" if xg_only else "Baseline Elo"
+        _titles = {"1.0": "Baseline Elo 1.0 (Goals)", "1.1": "Baseline Elo 1.1 (xG)", "2.0": "Baseline Elo 2.0 (Off/Def)"}
+        title = _titles.get(str(iteration)) if iteration else ("Baseline Elo xG" if xg_only else "Baseline Elo")
         css = """
         <style>
         body { font-family: sans-serif; margin: 1.5em; max-width: 1400px; }
@@ -540,7 +758,11 @@ class BaselineResultsDashboard:
         th { background: #f5f5f5; }
         tr:nth-child(even) { background: #fafafa; }
         </style>
-        """
+        """ + QOL_CSS
+
+        k_data_script = ""
+        if k_metrics_data:
+            k_data_script = f'<script type="application/json" id="k-metrics-data">{json.dumps(k_metrics_data)}</script>'
 
         full_html = f"""<!DOCTYPE html>
 <html>
@@ -553,6 +775,11 @@ class BaselineResultsDashboard:
 <body>
 <h1>{title}</h1>
 {"".join(sections)}
+{k_data_script}
+<div id="toast"></div>
+<script>
+{QOL_JS}
+</script>
 </body>
 </html>"""
 
@@ -621,8 +848,9 @@ def run_dashboard(
     output_path: str = "output/predictions/baseline_dashboard.html",
     xg_only: bool = False,
     also_xg: bool = False,
+    also_iterations: bool = True,
 ) -> int:
-    """CLI entry point: load and save dashboard. If also_xg, save both combined and xG-only."""
+    """CLI entry point: load and save dashboard. If also_xg, save xG-only. If also_iterations, save 1.0, 1.1, 2.0."""
     dash = BaselineResultsDashboard()
     if not dash.load():
         print("No baseline k_metrics found. Run _run_baseline_elo_sweep.py and _run_baseline_elo_xg_sweep.py first.")
@@ -636,6 +864,15 @@ def run_dashboard(
             ok = ok or ok_xg
             if ok_xg:
                 print(f"[OK] xG dashboard saved to {xg_path}")
+        if also_iterations and dash.goals_k_metrics_full is not None and "model_iteration" in dash.goals_k_metrics_full.columns:
+            parent = Path(output_path).parent
+            for it in ("1.0", "1.1", "2.0"):
+                sub = dash.goals_k_metrics_full[dash.goals_k_metrics_full["model_iteration"].astype(str) == it]
+                if len(sub) > 0:
+                    p = str(parent / f"baseline_elo_{it.replace('.', '_')}_dashboard.html")
+                    if dash.save_html(p, iteration=it):
+                        ok = True
+                        print(f"[OK] {it} dashboard saved to {p}")
     else:
         p = Path(output_path)
         ok = dash.save_matplotlib(str(p.with_suffix(".png")))
