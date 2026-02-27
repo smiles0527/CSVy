@@ -1,0 +1,638 @@
+"""
+Baseline Results Dashboard - Post-run visualization of baseline_elo and baseline_elo_xg outputs.
+
+Loads outputs from baseline_elo (goals) and baseline_elo_xg (xG) pipelines and displays:
+- Goals vs xG k-metrics comparison
+- Round 1 predictions side-by-side
+- Validation summaries
+
+Usage:
+    from utils.baseline_results_dashboard import BaselineResultsDashboard
+    dash = BaselineResultsDashboard()
+    dash.load()
+    dash.save_html('output/predictions/baseline_dashboard.html')
+
+    # Or from CLI:
+    python -m utils.baseline_results_dashboard
+"""
+
+import json
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+# Visualization imports
+try:
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+
+try:
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+
+
+class BaselineResultsDashboard:
+    """
+    Post-run dashboard that reads baseline_elo and baseline_elo_xg outputs
+    and creates interactive comparison visualizations.
+    """
+
+    def __init__(
+        self,
+        base_dir: Optional[Path] = None,
+        goals_sweep_path: Optional[Path] = None,
+        xg_sweep_path: Optional[Path] = None,
+        goals_validation_path: Optional[Path] = None,
+        xg_validation_path: Optional[Path] = None,
+    ):
+        self.base_dir = Path(base_dir or "output/predictions")
+        self.goals_sweep = Path(goals_sweep_path or self.base_dir / "baseline_elo" / "sweep")
+        self.xg_sweep = Path(xg_sweep_path or self.base_dir / "baseline_elo_xg" / "sweep")
+        self.goals_validation = Path(goals_validation_path or self.base_dir / "baseline_elo" / "validation")
+        self.xg_validation = Path(xg_validation_path or self.base_dir / "baseline_elo_xg" / "validation")
+
+        self.goals_k_metrics: Optional[pd.DataFrame] = None
+        self.goals_k_metrics_full: Optional[pd.DataFrame] = None  # All iterations 1.0, 1.1, 2.0
+        self.xg_k_metrics: Optional[pd.DataFrame] = None
+        self.goals_r1: Optional[pd.DataFrame] = None
+        self.xg_r1: Optional[pd.DataFrame] = None
+        self.goals_val_comparison: Optional[pd.DataFrame] = None
+        self.xg_val_comparison: Optional[pd.DataFrame] = None
+        self.goals_val_summary: Optional[str] = None
+        self.xg_val_summary: Optional[str] = None
+        self.goals_sweep_comparison: Optional[pd.DataFrame] = None
+        self.xg_sweep_comparison: Optional[pd.DataFrame] = None
+        self.goals_summary: Optional[Dict] = None
+        self.xg_summary: Optional[Dict] = None
+        self.goals_baselines: Optional[pd.DataFrame] = None
+        self.xg_baselines: Optional[pd.DataFrame] = None
+        self.goals_significance: Optional[pd.DataFrame] = None
+        self.xg_significance: Optional[pd.DataFrame] = None
+        self.goals_calibration: Optional[pd.DataFrame] = None
+        self.xg_calibration: Optional[pd.DataFrame] = None
+        self.goals_elo_vs_standings: Optional[pd.DataFrame] = None
+        self.xg_elo_vs_standings: Optional[pd.DataFrame] = None
+
+    def load(self) -> bool:
+        """Load all available output files. Returns True if at least one k_metrics was loaded."""
+        loaded = False
+
+        # Goals: from baseline_elo sweep, use iteration 1.0 (goals)
+        k_csv = self.goals_sweep / "k_metrics.csv"
+        if k_csv.exists():
+            df = pd.read_csv(k_csv)
+            if "model_iteration" in df.columns:
+                self.goals_k_metrics = df[df["model_iteration"] == "1.0"].copy()
+                self.goals_k_metrics_full = df.copy()
+            else:
+                self.goals_k_metrics = df.copy()
+                self.goals_k_metrics_full = df.copy()
+            loaded = len(self.goals_k_metrics) > 0
+        else:
+            alt = self.base_dir / "baseline_elo" / "goals" / "k_metrics.csv"
+            if alt.exists():
+                self.goals_k_metrics = pd.read_csv(alt)
+                if "k_factor" in self.goals_k_metrics.columns and "k" not in self.goals_k_metrics.columns:
+                    self.goals_k_metrics = self.goals_k_metrics.rename(columns={"k_factor": "k"})
+                self.goals_k_metrics_full = self.goals_k_metrics.copy()
+                loaded = True
+
+        # xG sweep k_metrics
+        k_csv_xg = self.xg_sweep / "k_metrics.csv"
+        if k_csv_xg.exists():
+            self.xg_k_metrics = pd.read_csv(k_csv_xg)
+            loaded = loaded or len(self.xg_k_metrics) > 0
+        else:
+            alt_xg = self.base_dir / "baseline_elo_xg" / "xg" / "k_metrics.csv"
+            if alt_xg.exists():
+                self.xg_k_metrics = pd.read_csv(alt_xg)
+                if self.xg_k_metrics is not None and "k_factor" in self.xg_k_metrics.columns:
+                    self.xg_k_metrics = self.xg_k_metrics.rename(columns={"k_factor": "k"})
+                loaded = True
+
+        # Round 1 predictions
+        for name, path in [
+            ("goals_r1", self.goals_sweep / "round1_predictions.csv"),
+            ("goals_r1_alt", self.base_dir / "baseline_elo" / "goals" / "round1_predictions.csv"),
+        ]:
+            if path.exists():
+                self.goals_r1 = pd.read_csv(path)
+                break
+
+        for name, path in [
+            ("xg_r1", self.xg_sweep / "round1_predictions.csv"),
+            ("xg_r1_alt", self.base_dir / "baseline_elo_xg" / "xg" / "round1_predictions.csv"),
+        ]:
+            if path.exists():
+                self.xg_r1 = pd.read_csv(path)
+                break
+
+        # Validation comparison
+        for path in [self.goals_validation / "comparison.csv", self.goals_validation / "summary.md"]:
+            if path.exists():
+                if path.suffix == ".csv":
+                    self.goals_val_comparison = pd.read_csv(path)
+                else:
+                    self.goals_val_summary = path.read_text(encoding="utf-8")
+                break
+
+        for path in [self.xg_validation / "comparison.csv", self.xg_validation / "summary.md"]:
+            if path.exists():
+                if path.suffix == ".csv":
+                    self.xg_val_comparison = pd.read_csv(path)
+                else:
+                    self.xg_val_summary = path.read_text(encoding="utf-8")
+                break
+
+        if self.goals_val_summary is None and (self.goals_validation / "summary.md").exists():
+            self.goals_val_summary = (self.goals_validation / "summary.md").read_text(encoding="utf-8")
+        if self.xg_val_summary is None and (self.xg_validation / "summary.md").exists():
+            self.xg_val_summary = (self.xg_validation / "summary.md").read_text(encoding="utf-8")
+
+        # Sweep comparison (full k-sweep for hyperparam comparison)
+        for p in [self.goals_sweep / "comparison.csv", self.base_dir / "baseline_elo" / "goals" / "comparison.csv"]:
+            if p.exists():
+                self.goals_sweep_comparison = pd.read_csv(p)
+                break
+        for p in [self.xg_sweep / "comparison.csv", self.base_dir / "baseline_elo_xg" / "xg" / "comparison.csv"]:
+            if p.exists():
+                self.xg_sweep_comparison = pd.read_csv(p)
+                break
+
+        # Pipeline summary (best_params, team_rankings)
+        for p in [self.goals_sweep / "pipeline_summary.json", self.base_dir / "baseline_elo" / "goals" / "pipeline_summary.json"]:
+            if p.exists():
+                with open(p, "r", encoding="utf-8") as f:
+                    self.goals_summary = json.load(f)
+                break
+        for p in [self.xg_sweep / "pipeline_summary.json", self.base_dir / "baseline_elo_xg" / "xg" / "pipeline_summary.json"]:
+            if p.exists():
+                with open(p, "r", encoding="utf-8") as f:
+                    self.xg_summary = json.load(f)
+                break
+
+        # Validation files
+        if (self.goals_validation / "baselines.csv").exists():
+            self.goals_baselines = pd.read_csv(self.goals_validation / "baselines.csv")
+        if (self.xg_validation / "baselines.csv").exists():
+            self.xg_baselines = pd.read_csv(self.xg_validation / "baselines.csv")
+        if (self.goals_validation / "significance.csv").exists():
+            self.goals_significance = pd.read_csv(self.goals_validation / "significance.csv")
+        if (self.xg_validation / "significance.csv").exists():
+            self.xg_significance = pd.read_csv(self.xg_validation / "significance.csv")
+        if (self.goals_validation / "calibration_stats.csv").exists():
+            self.goals_calibration = pd.read_csv(self.goals_validation / "calibration_stats.csv")
+        if (self.xg_validation / "calibration_stats.csv").exists():
+            self.xg_calibration = pd.read_csv(self.xg_validation / "calibration_stats.csv")
+        if (self.goals_validation / "elo_vs_standings.csv").exists():
+            self.goals_elo_vs_standings = pd.read_csv(self.goals_validation / "elo_vs_standings.csv")
+        if (self.xg_validation / "elo_vs_standings.csv").exists():
+            self.xg_elo_vs_standings = pd.read_csv(self.xg_validation / "elo_vs_standings.csv")
+
+        return loaded
+
+    def _ensure_k_column(self, df: pd.DataFrame) -> pd.DataFrame:
+        if "k" not in df.columns and "k_factor" in df.columns:
+            return df.rename(columns={"k_factor": "k"})
+        return df
+
+    def create_figure(self) -> Optional[Any]:
+        """Create Plotly figure with goals vs xG comparison (all iterations 1.0, 1.1, 2.0)."""
+        if not PLOTLY_AVAILABLE:
+            logger.warning("Plotly not available for BaselineResultsDashboard")
+            return None
+
+        goals_df = self.goals_k_metrics_full if self.goals_k_metrics_full is not None else self.goals_k_metrics
+        has_goals = goals_df is not None and len(goals_df) > 0
+        has_xg = self.xg_k_metrics is not None and len(self.xg_k_metrics) > 0
+        if not has_goals and not has_xg:
+            logger.warning("No k_metrics data loaded")
+            return None
+
+        metrics = ["accuracy", "brier_loss", "log_loss", "combined_rmse"]
+        available = []
+        for m in metrics:
+            if has_goals and m in goals_df.columns:
+                available.append(m)
+            elif has_xg and m in self.xg_k_metrics.columns:
+                available.append(m)
+        if not available:
+            df = goals_df if goals_df is not None else self.xg_k_metrics
+            if df is not None:
+                available = [c for c in df.columns if c not in ("k", "k_factor", "model_iteration")]
+
+        n_metrics = len(available)
+        n_cols = min(2, n_metrics)
+        n_rows = (n_metrics + n_cols - 1) // n_cols
+        fig = make_subplots(
+            rows=n_rows, cols=n_cols,
+            subplot_titles=available,
+            horizontal_spacing=0.12,
+            vertical_spacing=0.15,
+        )
+
+        colors = {"1.0": "#1f77b4", "1.1": "#ff7f0e", "2.0": "#2ca02c"}
+
+        for idx, metric in enumerate(available):
+            row = idx // n_cols + 1
+            col = idx % n_cols + 1
+
+            if has_goals and goals_df is not None and metric in goals_df.columns:
+                if "model_iteration" in goals_df.columns:
+                    for it in ["1.0", "1.1", "2.0"]:
+                        sub = goals_df[goals_df["model_iteration"] == it]
+                        if len(sub) == 0:
+                            continue
+                        gdf = self._ensure_k_column(sub)
+                        k_col = "k" if "k" in gdf.columns else "k_factor"
+                        label = {"1.0": "Goals (1.0)", "1.1": "xG (1.1)", "2.0": "Off/Def (2.0)"}.get(it, it)
+                        fig.add_trace(
+                            go.Scatter(
+                                x=gdf[k_col],
+                                y=gdf[metric],
+                                name=label,
+                                mode="lines+markers",
+                                line=dict(color=colors.get(it, "#333")),
+                            ),
+                            row=row, col=col,
+                        )
+                else:
+                    gdf = self._ensure_k_column(goals_df)
+                    k_col = "k" if "k" in gdf.columns else "k_factor"
+                    fig.add_trace(
+                        go.Scatter(
+                            x=gdf[k_col],
+                            y=gdf[metric],
+                            name="Goals",
+                            mode="lines+markers",
+                            line=dict(color="#1f77b4"),
+                        ),
+                        row=row, col=col,
+                    )
+            goals_has_iter = goals_df is not None and "model_iteration" in goals_df.columns
+            if has_xg and self.xg_k_metrics is not None and metric in self.xg_k_metrics.columns and not goals_has_iter:
+                xdf = self._ensure_k_column(self.xg_k_metrics)
+                k_col = "k" if "k" in xdf.columns else "k_factor"
+                fig.add_trace(
+                    go.Scatter(
+                        x=xdf[k_col],
+                        y=xdf[metric],
+                        name="xG",
+                        mode="lines+markers",
+                        line=dict(color="#ff7f0e"),
+                    ),
+                    row=row, col=col,
+                )
+            elif has_xg and self.xg_k_metrics is not None and metric in self.xg_k_metrics.columns and goals_has_iter:
+                xdf = self._ensure_k_column(self.xg_k_metrics)
+                k_col = "k" if "k" in xdf.columns else "k_factor"
+                fig.add_trace(
+                    go.Scatter(
+                        x=xdf[k_col],
+                        y=xdf[metric],
+                        name="xG-standalone",
+                        mode="lines+markers",
+                        line=dict(color="#d62728"),
+                    ),
+                    row=row, col=col,
+                )
+
+        fig.update_layout(
+            title="K vs Metrics",
+            height=400 * max(1, n_rows),
+            showlegend=True,
+        )
+        fig.update_xaxes(title_text="k")
+        for idx, metric in enumerate(available):
+            row, col = idx // n_cols + 1, idx % n_cols + 1
+            if metric == "accuracy":
+                fig.update_yaxes(range=[0, 1.05], row=row, col=col)
+            elif metric == "combined_rmse":
+                fig.update_yaxes(rangemode="tozero", row=row, col=col)
+        return fig
+
+    def create_calibration_figure(self) -> Optional[Any]:
+        """Create Plotly reliability diagram from calibration_stats."""
+        if not PLOTLY_AVAILABLE:
+            return None
+        cal_list = []
+        if self.goals_calibration is not None and len(self.goals_calibration) > 0:
+            cal_list.append(("Goals", self.goals_calibration))
+        if self.xg_calibration is not None and len(self.xg_calibration) > 0:
+            cal_list.append(("xG", self.xg_calibration))
+        if not cal_list:
+            return None
+
+        n = len(cal_list)
+        fig = make_subplots(rows=1, cols=n, subplot_titles=[c[0] for c in cal_list])
+        colors = ["#1f77b4", "#ff7f0e"]
+        for idx, (label, cal_df) in enumerate(cal_list):
+            fig.add_trace(
+                go.Scatter(
+                    x=cal_df["pred_avg"],
+                    y=cal_df["actual_rate"],
+                    mode="markers",
+                    name=label,
+                    marker=dict(size=cal_df["count"].clip(upper=100), opacity=0.7),
+                    text=[f"n={int(c)}" for c in cal_df["count"]],
+                ),
+                row=1, col=idx + 1,
+            )
+            fig.add_trace(
+                go.Scatter(x=[0, 1], y=[0, 1], mode="lines", name="Ideal", line=dict(dash="dash", color="gray")),
+                row=1, col=idx + 1,
+            )
+        fig.update_layout(title="Calibration", height=400)
+        for c in range(1, n + 1):
+            fig.update_xaxes(title_text="Predicted prob", range=[0, 1], row=1, col=c)
+            fig.update_yaxes(title_text="Actual rate", range=[0, 1], scaleanchor="x", scaleratio=1, row=1, col=c)
+        return fig
+
+    def _section_overview(self) -> str:
+        """Overview: best k, key metrics, output paths."""
+        parts = []
+        if self.goals_summary:
+            bp = self.goals_summary.get("best_params", {})
+            best_k = bp.get("k_factor", self.goals_summary.get("best_k", "?"))
+            parts.append(f"<p><b>Goals</b>: best k={best_k} | {self.base_dir / 'baseline_elo'}</p>")
+        if self.xg_summary:
+            bp = self.xg_summary.get("best_params", {})
+            best_k = bp.get("k_factor", self.xg_summary.get("best_k", "?"))
+            parts.append(f"<p><b>xG</b>: best k={best_k} | {self.base_dir / 'baseline_elo_xg'}</p>")
+        if self.goals_val_comparison is not None and len(self.goals_val_comparison) > 0:
+            r = self.goals_val_comparison.iloc[0]
+            parts.append(f"<p>Goals best: acc={r.get('win_accuracy', 0):.1%} brier={r.get('brier_loss', 0):.4f}</p>")
+        if self.xg_val_comparison is not None and len(self.xg_val_comparison) > 0:
+            r = self.xg_val_comparison.iloc[0]
+            parts.append(f"<p>xG best: acc={r.get('win_accuracy', 0):.1%} brier={r.get('brier_loss', 0):.4f}</p>")
+        return "<h2>Overview</h2>" + ("".join(parts) if parts else "<p>No summary data.</p>")
+
+    def _section_hyperparams(self) -> str:
+        """Hyperparameter comparison: best params table, full sweep table."""
+        parts = ["<h2>Hyperparameters</h2>"]
+        if self.goals_summary or self.xg_summary:
+            rows = []
+            if self.goals_summary:
+                bp = self.goals_summary.get("best_params", {})
+                rows.append({"Pipeline": "Goals", **{k: v for k, v in bp.items()}})
+            if self.xg_summary:
+                bp = self.xg_summary.get("best_params", {})
+                rows.append({"Pipeline": "xG", **{k: v for k, v in bp.items()}})
+            if rows:
+                df = pd.DataFrame(rows)
+                parts.append(f"<h3>Params</h3>{df.to_html(index=False)}")
+        combined = []
+        if self.goals_sweep_comparison is not None and len(self.goals_sweep_comparison) > 0:
+            df = self.goals_sweep_comparison.copy()
+            df["pipeline"] = "goals"
+            if "model_iteration" in df.columns:
+                df["config"] = df["model_iteration"].astype(str) + "(k=" + df["k"].astype(str) + ")"
+            combined.append(df)
+        if self.xg_sweep_comparison is not None and len(self.xg_sweep_comparison) > 0:
+            df = self.xg_sweep_comparison.copy()
+            df["pipeline"] = "xG"
+            if "model_iteration" not in df.columns:
+                df["model_iteration"] = "xG"
+            combined.append(df)
+        if combined:
+            sweep_df = pd.concat(combined, ignore_index=True)
+            cols = [c for c in ["pipeline", "model_iteration", "k", "config", "win_accuracy", "brier_loss", "log_loss", "combined_rmse"] if c in sweep_df.columns]
+            parts.append(f"<h3>K-Sweep</h3>{sweep_df[cols].to_html(index=False)}")
+        return "".join(parts)
+
+    def _section_validation(self) -> str:
+        """Validation: baselines, significance, comparison, elo vs standings."""
+        parts = ["<h2>Validation</h2>"]
+        if self.goals_baselines is not None:
+            parts.append(f"<h3>Baselines (Goals)</h3>{self.goals_baselines.to_html(index=False)}")
+        if self.xg_baselines is not None:
+            parts.append(f"<h3>Baselines (xG)</h3>{self.xg_baselines.to_html(index=False)}")
+        if self.goals_significance is not None:
+            df = self.goals_significance.copy()
+            df["significant"] = df["p_value"] < 0.05
+            parts.append(f"<h3>Significance (Goals)</h3>{df.to_html(index=False)}")
+        if self.xg_significance is not None:
+            df = self.xg_significance.copy()
+            df["significant"] = df["p_value"] < 0.05
+            parts.append(f"<h3>Significance (xG)</h3>{df.to_html(index=False)}")
+        if self.goals_val_comparison is not None:
+            parts.append(f"<h3>Elo vs Baselines (Goals)</h3>{self.goals_val_comparison.to_html(index=False)}")
+        if self.xg_val_comparison is not None:
+            parts.append(f"<h3>Elo vs Baselines (xG)</h3>{self.xg_val_comparison.to_html(index=False)}")
+        if self.goals_elo_vs_standings is not None:
+            parts.append(f"<h3>Elo vs Standings (Goals)</h3>{self.goals_elo_vs_standings.to_html(index=False)}")
+        if self.xg_elo_vs_standings is not None:
+            parts.append(f"<h3>Elo vs Standings (xG)</h3>{self.xg_elo_vs_standings.to_html(index=False)}")
+        return "".join(parts) if len(parts) > 1 else parts[0]
+
+    def _section_rankings(self) -> str:
+        """Team rankings top 10 side-by-side."""
+        parts = ["<h2>Rankings</h2><div style='display:flex;gap:2em'>"]
+        if self.goals_summary and "team_rankings" in self.goals_summary:
+            tr = self.goals_summary["team_rankings"]
+            top = sorted(tr.items(), key=lambda x: -x[1])[:10]
+            parts.append(f"<div><h3>Goals</h3><table><tr><th>Team</th><th>Rating</th></tr>")
+            for t, r in top:
+                parts.append(f"<tr><td>{t}</td><td>{r:.1f}</td></tr>")
+            parts.append("</table></div>")
+        if self.xg_summary and "team_rankings" in self.xg_summary:
+            tr = self.xg_summary["team_rankings"]
+            top = sorted(tr.items(), key=lambda x: -x[1])[:10]
+            parts.append(f"<div><h3>xG</h3><table><tr><th>Team</th><th>Rating</th></tr>")
+            for t, r in top:
+                parts.append(f"<tr><td>{t}</td><td>{r:.1f}</td></tr>")
+            parts.append("</table></div>")
+        parts.append("</div>")
+        return "".join(parts)
+
+    def create_r1_comparison_table(self) -> Optional[pd.DataFrame]:
+        """Merge Round 1 predictions from goals and xG for side-by-side comparison."""
+        if self.goals_r1 is None and self.xg_r1 is None:
+            return None
+
+        if self.goals_r1 is None:
+            return self.xg_r1
+        if self.xg_r1 is None:
+            return self.goals_r1
+
+        # Align by matchup (home vs away)
+        g = self.goals_r1.copy()
+        x = self.xg_r1.copy()
+
+        # Common columns for matching
+        home_col = "home_team" if "home_team" in g.columns else "home"
+        away_col = "away_team" if "away_team" in g.columns else "away"
+        if home_col not in g.columns and "matchup" in g.columns:
+            return pd.concat([g.add_suffix("_goals"), x.add_suffix("_xg")], axis=1)
+
+        if "predicted_winner" in g.columns:
+            g = g.rename(columns={"predicted_winner": "pred_winner_goals"})
+        elif "pred_winner" in g.columns:
+            g = g.rename(columns={"pred_winner": "pred_winner_goals"})
+        if "confidence" in g.columns:
+            g = g.rename(columns={"confidence": "win_prob_goals"})
+        elif "win_prob" in g.columns:
+            g = g.rename(columns={"win_prob": "win_prob_goals"})
+        if "predicted_winner" in x.columns:
+            x = x.rename(columns={"predicted_winner": "pred_winner_xg"})
+        elif "pred_winner" in x.columns:
+            x = x.rename(columns={"pred_winner": "pred_winner_xg"})
+        if "confidence" in x.columns:
+            x = x.rename(columns={"confidence": "win_prob_xg"})
+        elif "win_prob" in x.columns:
+            x = x.rename(columns={"win_prob": "win_prob_xg"})
+
+        if home_col in g.columns and home_col in x.columns:
+            merged = pd.merge(
+                g[[c for c in g.columns if c in (home_col, away_col, "pred_winner_goals", "win_prob_goals")]],
+                x[[c for c in x.columns if c in (home_col, away_col, "pred_winner_xg", "win_prob_xg")]],
+                on=[home_col, away_col],
+                how="outer",
+            )
+            return merged
+        return pd.concat([g, x], axis=1)
+
+    def save_html(self, path: str) -> bool:
+        """Save comprehensive interactive HTML dashboard."""
+        fig = self.create_figure()
+        if fig is None:
+            return False
+
+        out = Path(path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+
+        sections = []
+        sections.append(self._section_overview())
+        sections.append(self._section_hyperparams())
+        sections.append("<h2>K vs Metrics</h2>" + fig.to_html(full_html=False, include_plotlyjs=False))
+        sections.append(self._section_validation())
+
+        cal_fig = self.create_calibration_figure()
+        if cal_fig is not None:
+            sections.append("<h2>Calibration</h2>" + cal_fig.to_html(full_html=False, include_plotlyjs=False))
+
+        sections.append(self._section_rankings())
+
+        r1 = self.create_r1_comparison_table()
+        if r1 is not None and len(r1) > 0:
+            sections.append(f"<h2>Round 1</h2>{r1.to_html(classes='table', index=False)}")
+
+        css = """
+        <style>
+        body { font-family: sans-serif; margin: 1.5em; max-width: 1400px; }
+        h1 { border-bottom: 1px solid #ccc; padding-bottom: 0.3em; }
+        h2 { margin-top: 1.5em; color: #333; }
+        h3 { margin-top: 1em; font-size: 1em; }
+        table { border-collapse: collapse; margin: 0.5em 0; font-size: 0.9em; }
+        th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; }
+        th { background: #f5f5f5; }
+        tr:nth-child(even) { background: #fafafa; }
+        </style>
+        """
+
+        full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Baseline Elo</title>
+{css}
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+<h1>Baseline Elo</h1>
+{"".join(sections)}
+</body>
+</html>"""
+
+        out.write_text(full_html, encoding="utf-8")
+        logger.info(f"Dashboard saved to {out}")
+        return True
+
+    def save_matplotlib(self, path: str) -> bool:
+        """Save matplotlib figure as fallback when Plotly is unavailable."""
+        if not MATPLOTLIB_AVAILABLE:
+            logger.warning("matplotlib not available")
+            return False
+
+        has_goals = self.goals_k_metrics is not None and len(self.goals_k_metrics) > 0
+        has_xg = self.xg_k_metrics is not None and len(self.xg_k_metrics) > 0
+        if not has_goals and not has_xg:
+            return False
+
+        metrics = ["accuracy", "brier_loss", "log_loss", "combined_rmse"]
+        n = sum(1 for m in metrics
+                if (has_goals and m in (self.goals_k_metrics or pd.DataFrame()).columns)
+                or (has_xg and m in (self.xg_k_metrics or pd.DataFrame()).columns))
+        if n == 0:
+            return False
+
+        n_cols = min(2, n)
+        n_rows = (n + n_cols - 1) // n_cols
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(10, 4 * n_rows))
+        if n == 1:
+            axes = [axes]
+        else:
+            axes = axes.flatten()
+
+        idx = 0
+        for metric in metrics:
+            if (has_goals and self.goals_k_metrics is not None and metric in self.goals_k_metrics.columns) or \
+               (has_xg and self.xg_k_metrics is not None and metric in self.xg_k_metrics.columns):
+                ax = axes[idx] if n > 1 else axes[0]
+                if has_goals and metric in self.goals_k_metrics.columns:
+                    gdf = self._ensure_k_column(self.goals_k_metrics)
+                    k_col = "k" if "k" in gdf.columns else "k_factor"
+                    ax.plot(gdf[k_col], gdf[metric], "o-", label="Goals", color="#1f77b4")
+                if has_xg and metric in self.xg_k_metrics.columns:
+                    xdf = self._ensure_k_column(self.xg_k_metrics)
+                    k_col = "k" if "k" in xdf.columns else "k_factor"
+                    ax.plot(xdf[k_col], xdf[metric], "s-", label="xG", color="#ff7f0e")
+                ax.set_xlabel("k")
+                ax.set_ylabel(metric)
+                ax.set_title(metric)
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                idx += 1
+
+        for j in range(idx, len(axes)):
+            axes[j].set_visible(False)
+
+        fig.suptitle("Baseline Elo: Goals vs xG K-Metrics")
+        plt.tight_layout()
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=120, bbox_inches="tight")
+        plt.close()
+        return True
+
+
+def run_dashboard(output_path: str = "output/predictions/baseline_dashboard.html"):
+    """CLI entry point: load and save dashboard."""
+    dash = BaselineResultsDashboard()
+    if not dash.load():
+        print("No baseline k_metrics found. Run _run_baseline_elo_sweep.py and _run_baseline_elo_xg_sweep.py first.")
+        return 1
+    if PLOTLY_AVAILABLE:
+        ok = dash.save_html(output_path)
+    else:
+        p = Path(output_path)
+        ok = dash.save_matplotlib(str(p.with_suffix(".png")))
+    print(f"[OK] Dashboard saved" if ok else "[WARN] Could not save dashboard")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    import sys
+    import os
+    _cwd = Path(os.path.abspath("")).resolve()
+    if (_cwd / "python").is_dir():
+        os.chdir(_cwd / "python")
+    sys.exit(run_dashboard())
