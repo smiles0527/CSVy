@@ -634,8 +634,8 @@ class BaselineResultsDashboard:
         parts.append("</div>")
         return "".join(parts)
 
-    def _section_all_teams(self, r1: pd.DataFrame) -> str:
-        """List every team in Round 1 with rank, so user can verify all teams are present."""
+    def _section_all_teams(self, r1: pd.DataFrame, xg_only: bool = False, iteration: Optional[str] = None) -> str:
+        """List every team in Round 1 with rank(s), so user can verify all teams are present."""
         home_col = "home_team" if "home_team" in r1.columns else "home"
         away_col = "away_team" if "away_team" in r1.columns else "away"
         if home_col not in r1.columns or away_col not in r1.columns:
@@ -650,21 +650,52 @@ class BaselineResultsDashboard:
                 teams.add(a)
         if not teams:
             return ""
-        teams_sorted = sorted(teams)
-        tr = {}
-        if self.goals_summary and "team_rankings" in self.goals_summary:
-            tr = self.goals_summary["team_rankings"]
-        rows = []
-        for t in teams_sorted:
-            t_lower = t.lower().replace(" ", "_")
-            rank = None
+
+        def _rank_and_rating(tr: dict, t: str, t_lower: str) -> Tuple[Optional[int], Optional[float]]:
             rating = tr.get(t_lower) or tr.get(t)
-            if rating is not None:
-                ranked_list = sorted(tr.items(), key=lambda x: -x[1])
-                rank = next((i + 1 for i, (k, _) in enumerate(ranked_list) if k == t_lower or k == t), None)
-            rows.append({"Team": t, "Rank": rank if rank else "—", "Rating": f"{rating:.1f}" if rating is not None else "—"})
+            if rating is None:
+                return (999, None)
+            rl = sorted(tr.items(), key=lambda x: -x[1])
+            rank = next((i + 1 for i, (k, _) in enumerate(rl) if k == t_lower or k == t), 999)
+            return (rank, rating)
+
+        tr_goals = (self.goals_summary or {}).get("team_rankings") or {}
+        tr_xg = (self.xg_summary or {}).get("team_rankings") or {}
+        has_both = tr_goals and tr_xg and not xg_only and not iteration
+
+        rows = []
+        for t in teams:
+            t_lower = t.lower().replace(" ", "_")
+            r_g, rat_g = _rank_and_rating(tr_goals, t, t_lower)
+            r_x, rat_x = _rank_and_rating(tr_xg, t, t_lower)
+            sort_rank = r_g if tr_goals else (r_x if tr_xg else 999)
+            if has_both:
+                rows.append({
+                    "Team": t,
+                    "Rank_G": r_g, "Rating_G": rat_g,
+                    "Rank_xG": r_x, "Rating_xG": rat_x,
+                    "_sort": sort_rank,
+                })
+            else:
+                rows.append({
+                    "Team": t,
+                    "Rank": r_g if tr_goals else r_x,
+                    "Rating": rat_g if tr_goals else rat_x,
+                    "_sort": sort_rank,
+                })
         df = pd.DataFrame(rows)
-        n = len(teams_sorted)
+        df = df.sort_values("_sort").reset_index(drop=True)
+        df = df.drop(columns=["_sort"], errors="ignore")
+
+        if has_both:
+            df["Rank_G"] = df["Rank_G"].apply(lambda x: "—" if x == 999 else int(x))
+            df["Rating_G"] = df["Rating_G"].apply(lambda x: "—" if x is None else f"{x:.1f}")
+            df["Rank_xG"] = df["Rank_xG"].apply(lambda x: "—" if x == 999 else int(x))
+            df["Rating_xG"] = df["Rating_xG"].apply(lambda x: "—" if x is None else f"{x:.1f}")
+        else:
+            df["Rank"] = df["Rank"].apply(lambda x: "—" if x == 999 else int(x))
+            df["Rating"] = df["Rating"].apply(lambda x: "—" if x is None else f"{x:.1f}")
+        n = len(rows)
         return f'<h3>All teams in Round 1 ({n})</h3>{self._wrap_table(df.to_html(index=False))}'
 
     def create_r1_comparison_table(self) -> Optional[pd.DataFrame]:
@@ -742,7 +773,7 @@ class BaselineResultsDashboard:
 
         r1 = self.create_r1_comparison_table()
         if r1 is not None and len(r1) > 0:
-            all_teams_html = self._section_all_teams(r1)
+            all_teams_html = self._section_all_teams(r1, xg_only=xg_only, iteration=iteration)
             sections.append(f'<h2 id="round1">Round 1</h2>{all_teams_html}{self._wrap_table(r1.to_html(classes="table", index=False))}')
 
         _titles = {"1.0": "Baseline Elo 1.0 (Goals)", "1.1": "Baseline Elo 1.1 (xG)", "2.0": "Baseline Elo 2.0 (Off/Def)"}
@@ -757,8 +788,9 @@ class BaselineResultsDashboard:
         th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; }
         th { background: #f5f5f5; }
         tr:nth-child(even) { background: #fafafa; }
+        """ + QOL_CSS + """
         </style>
-        """ + QOL_CSS
+        """
 
         k_data_script = ""
         if k_metrics_data:
