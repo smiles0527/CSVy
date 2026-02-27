@@ -430,6 +430,15 @@ r1_csv = pathlib.Path(out_cfg.get('round1_csv', str(sweep_dir / 'round1_predicti
 pred_df.to_csv(r1_csv, index=False)
 print(f'[OK] {r1_csv}')
 
+# Per-iteration team rankings (so dashboard shows correct data for 1.0/1.1/2.0)
+team_rankings_by_iteration = {}
+for it in ['1.0', '1.1', '2.0']:
+    row = best_per_iter[best_per_iter['model_iteration'] == it].iloc[0]
+    params = {'k_factor': row['k'], **formula_constants}
+    m = ITERATION_CONFIG[it]['model_class'](params)
+    m.fit(train_df)
+    team_rankings_by_iteration[it] = {t: round(r, 1) for t, r in m.get_rankings()}
+
 # Pipeline summary
 summary = {
     'model': 'BaselineEloSweep',
@@ -442,6 +451,7 @@ summary = {
     'n_test': len(test_df),
     'best_params': {'k_factor': float(best_k), **formula_constants},
     'team_rankings': {t: round(r, 1) for t, r in final_model.get_rankings()},
+    'team_rankings_by_iteration': team_rankings_by_iteration,
     'predictions': preds,
 }
 summary_path = pathlib.Path(out_cfg.get('summary_json', str(sweep_dir / 'pipeline_summary.json')))

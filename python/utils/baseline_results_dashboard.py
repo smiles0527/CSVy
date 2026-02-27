@@ -617,8 +617,15 @@ class BaselineResultsDashboard:
         """Team rankings: all teams side-by-side with rank."""
         parts = ['<h2 id="rankings">Rankings</h2><div style="display:flex;gap:2em">']
         lab = {"1.0": "Goals", "1.1": "xG", "2.0": "Off/Def"}.get(iteration) if iteration else "Goals"
-        if not xg_only and self.goals_summary and "team_rankings" in self.goals_summary:
-            tr = self.goals_summary["team_rankings"]
+        if not xg_only and self.goals_summary:
+            # Use iteration-specific rankings when viewing 1.0/1.1/2.0 dashboards
+            by_it = (self.goals_summary or {}).get("team_rankings_by_iteration") or {}
+            tr = by_it.get(str(iteration)) if iteration else self.goals_summary.get("team_rankings")
+            if tr is None:
+                tr = self.goals_summary.get("team_rankings", {})
+        else:
+            tr = {}
+        if tr:
             ranked = sorted(tr.items(), key=lambda x: -x[1])
             n = len(ranked)
             tbl = "<table><tr><th>Rank</th><th>Team</th><th>Rating</th></tr>"
@@ -663,7 +670,10 @@ class BaselineResultsDashboard:
             rank = next((i + 1 for i, (k, _) in enumerate(rl) if k == t_lower or k == t), 999)
             return (rank, rating)
 
-        tr_goals = (self.goals_summary or {}).get("team_rankings") or {}
+        by_it = (self.goals_summary or {}).get("team_rankings_by_iteration") or {}
+        tr_goals = by_it.get(str(iteration)) if iteration else (self.goals_summary or {}).get("team_rankings") or {}
+        if not tr_goals and self.goals_summary:
+            tr_goals = self.goals_summary.get("team_rankings") or {}
         tr_xg = (self.xg_summary or {}).get("team_rankings") or {}
         has_both = tr_goals and tr_xg and not xg_only and not iteration
         use_xg_for_single = xg_only or iteration == "1.1"

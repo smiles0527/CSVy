@@ -202,7 +202,7 @@ class BaselineEloModel:
                 return alias
         return None
 
-      def fit(self, games_df: pd.DataFrame) -> None:
+    def fit(self, games_df: pd.DataFrame) -> None:
         """Train on game-level DataFrame (home_team, away_team, home_goals, away_goals)."""
         home_col = self._get_team_column(games_df, 'home_team') or 'home_team'
         away_col = self._get_team_column(games_df, 'away_team') or 'away_team'
