@@ -21,6 +21,8 @@ output/hyperparams/*.csv
 output/reports/*.html
 output/predictions/*.csv
 
+# docs/dashboards/*.html is committed for GitHub Pages (copy via build_gh_pages)
+
 # Python
 python/venv/
 python/__pycache__/
