@@ -19,6 +19,9 @@ validation:
   n_runs: 1
 
 # -----------------------------------------------------------------------------
+# OPTIONAL - live plot: python _run_baseline_elo_sweep.py --live
+# live_dashboard: true
+# -----------------------------------------------------------------------------
 # ITERATIONS - k ranges per model iteration
 # Set quick_test: true to use smaller ranges for fast validation
 # -----------------------------------------------------------------------------

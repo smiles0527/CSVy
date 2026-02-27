@@ -9,10 +9,6 @@ import sys
 import pathlib
 from scipy import stats
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
 _cwd = pathlib.Path(os.path.abspath('')).resolve()
 if (_cwd / 'python').is_dir():
     _python_dir = _cwd / 'python'
@@ -27,6 +23,32 @@ else:
 
 os.chdir(_python_dir)
 sys.path.insert(0, str(_python_dir))
+
+# Load config early for live_dashboard check
+proj_root = _python_dir.parent if (_python_dir.parent / 'config').is_dir() else _python_dir
+config_path = proj_root / 'config' / 'hyperparams' / 'model_baseline_elo_xg_sweep.yaml'
+_config_pre = {}
+if config_path.exists():
+    with open(config_path, 'r') as f:
+        _config_pre = yaml.safe_load(f) or {}
+
+# Backend: use display for live dashboard, else headless
+_use_live = '--live' in sys.argv or _config_pre.get('live_dashboard', False)
+if _use_live:
+    import matplotlib
+    for backend in ('TkAgg', 'Qt5Agg', 'GTK4Agg', 'WXAgg', 'MacOSX'):
+        try:
+            matplotlib.use(backend)
+            break
+        except Exception:
+            continue
+    else:
+        _use_live = False
+if not _use_live:
+    import matplotlib
+    matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 from utils.baseline_elo_xg import BaselineEloXGModel
 
 
@@ -42,12 +64,7 @@ def _expand_param(val, default_list):
     return default_list
 
 
-proj_root = _python_dir.parent if (_python_dir.parent / 'config').is_dir() else _python_dir
-config_path = proj_root / 'config' / 'hyperparams' / 'model_baseline_elo_xg_sweep.yaml'
-config = {}
-if config_path.exists():
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f) or {}
+config = _config_pre
 
 data_cfg = config.get('data', {})
 val_cfg = config.get('validation', {})
@@ -96,13 +113,37 @@ test_df = games_df.iloc[n - test_size :].copy()
 
 results = []
 print(f'[Sweep] xG Elo: {len(k_range)} k-values')
-for k in k_range:
+if _use_live:
+    try:
+        from utils.live_dashboard import LivePlotter
+        _plotter = LivePlotter(metrics=['win_accuracy', 'brier_loss', 'combined_rmse'], update_interval=1)
+        _plotter.start(title='xG Elo K-Sweep')
+    except Exception as e:
+        print(f'[Live] Dashboard unavailable: {e}')
+        _use_live = False
+        _plotter = None
+else:
+    _plotter = None
+
+for step_idx, k in enumerate(k_range):
     params = {'k_factor': k, **formula_constants}
     m = BaselineEloXGModel(params)
     m.fit(train_df)
     met = m.evaluate(test_df)
     brier_loss, log_loss = BaselineEloXGModel.compute_brier_logloss(m, test_df)
     results.append({'k': k, 'config': f"xG(k={k})", **met, 'brier_loss': brier_loss, 'log_loss': log_loss})
+    if _use_live and _plotter is not None:
+        _plotter.update({
+            'win_accuracy': met.get('win_accuracy', 0),
+            'brier_loss': brier_loss,
+            'combined_rmse': met.get('combined_rmse', 0),
+        }, epoch=step_idx)
+
+if _use_live and _plotter is not None:
+    try:
+        _plotter.finalize()
+    except Exception:
+        pass
 
 results_df = pd.DataFrame(results).sort_values('combined_rmse')
 k_metrics_df = results_df[['k', 'win_accuracy', 'brier_loss', 'log_loss', 'combined_rmse']].rename(

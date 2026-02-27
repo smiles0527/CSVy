@@ -267,23 +267,47 @@ class MetricComparison:
     >>> comparison.add_experiment("baseline", {"rmse": [0.5, 0.4, 0.3]})
     >>> comparison.add_experiment("improved", {"rmse": [0.4, 0.3, 0.2]})
     >>> comparison.plot()
+    
+    For k-sweep (x-axis = k values):
+    >>> comparison.add_experiment("goals", {"accuracy": [0.6, 0.62, 0.61]}, x_values=[5, 10, 15])
+    >>> comparison.add_experiment("xG", {"accuracy": [0.58, 0.63, 0.62]}, x_values=[5, 10, 15])
+    >>> comparison.plot()
     """
     
     def __init__(self):
         self.experiments: Dict[str, Dict[str, List[float]]] = {}
+        self.x_values: Dict[str, Optional[List[float]]] = {}
         self.colors = plt.cm.tab10.colors if MATPLOTLIB_AVAILABLE else []
     
-    def add_experiment(self, name: str, metrics: Dict[str, List[float]]):
-        """Add an experiment's metrics."""
+    def add_experiment(
+        self,
+        name: str,
+        metrics: Dict[str, List[float]],
+        x_values: Optional[List[float]] = None
+    ):
+        """
+        Add an experiment's metrics.
+        
+        Parameters
+        ----------
+        name : str
+            Experiment name.
+        metrics : dict
+            Metric name -> list of values.
+        x_values : list, optional
+            X-axis values (e.g. k values for k-sweep). If None, uses 0, 1, 2, ...
+        """
         self.experiments[name] = metrics
+        self.x_values[name] = x_values
     
     def add_from_tracker(self, tracker, experiment_name: str):
-        """Add metrics from an ExperimentTracker."""
+        """Add metrics from an ExperimentTracker (uses epoch index for x-axis)."""
         if hasattr(tracker, 'metric_history'):
             metrics = {}
             for name in tracker.metric_history.metrics:
                 metrics[name] = tracker.metric_history.get(name)
             self.experiments[experiment_name] = metrics
+            self.x_values[experiment_name] = None
     
     def plot(
         self,
@@ -334,15 +358,19 @@ class MetricComparison:
             row = idx // n_cols
             col = idx % n_cols
             ax = axes[row, col]
-            
+            use_k_axis = False
             for exp_idx, (exp_name, exp_metrics) in enumerate(self.experiments.items()):
                 if metric_name in exp_metrics:
                     values = exp_metrics[metric_name]
-                    epochs = list(range(len(values)))
+                    x_vals = self.x_values.get(exp_name)
+                    if x_vals is not None and len(x_vals) == len(values):
+                        x_axis = x_vals
+                        use_k_axis = True
+                    else:
+                        x_axis = list(range(len(values)))
                     color = self.colors[exp_idx % len(self.colors)]
-                    ax.plot(epochs, values, label=exp_name, color=color, linewidth=2)
-            
-            ax.set_xlabel('Epoch')
+                    ax.plot(x_axis, values, label=exp_name, color=color, linewidth=2)
+            ax.set_xlabel('k' if use_k_axis else 'Epoch')
             ax.set_ylabel(metric_name)
             ax.set_title(metric_name)
             ax.legend()

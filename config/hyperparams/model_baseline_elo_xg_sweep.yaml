@@ -19,6 +19,9 @@ validation:
   n_runs: 1
 
 # -----------------------------------------------------------------------------
+# OPTIONAL - live plot during sweep: python _run_baseline_elo_xg_sweep.py --live
+# live_dashboard: true  # or pass --live
+# -----------------------------------------------------------------------------
 # K RANGE - same structure as baseline_elo
 # -----------------------------------------------------------------------------
 quick_test: false
