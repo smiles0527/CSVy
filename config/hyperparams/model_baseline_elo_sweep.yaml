@@ -23,14 +23,14 @@ validation:
 # live_dashboard: true
 # -----------------------------------------------------------------------------
 # ITERATIONS - k ranges per model iteration
-# Win (goals + xG): k 0.1–35 step 0.1. Off/Def (2.0): k 0.1–100 step 0.1.
+# 1.0 (goals): k 0.1–35. 1.1 (xG): k 0.1–100. 2.0 (Off/Def): k 0.1–100.
 # Set quick_test: true to use smaller ranges for fast validation
 # -----------------------------------------------------------------------------
 quick_test: false
 iterations:
   1.0: { min: 0.1, max: 35, step: 0.1 }   # goals win
-  1.1: { min: 0.1, max: 35, step: 0.1 }   # xG win
-  2.0: { min: 0.1, max: 100, step: 0.1 }  # Off/Def Elo
+  1.1: { min: 0.1, max: 100, step: 0.1 } # xG win
+  2.0: { min: 0.1, max: 100, step: 0.1 } # Off/Def Elo
 
 # -----------------------------------------------------------------------------
 # FORMULA CONSTANTS (shared)
