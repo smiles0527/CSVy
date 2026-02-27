@@ -205,13 +205,13 @@ class BaselineResultsDashboard:
             return df.rename(columns={"k_factor": "k"})
         return df
 
-    def create_figure(self) -> Optional[Any]:
+    def create_figure(self, xg_only: bool = False) -> Optional[Any]:
         """Create Plotly figure with goals vs xG comparison (all iterations 1.0, 1.1, 2.0)."""
         if not PLOTLY_AVAILABLE:
             logger.warning("Plotly not available for BaselineResultsDashboard")
             return None
 
-        goals_df = self.goals_k_metrics_full if self.goals_k_metrics_full is not None else self.goals_k_metrics
+        goals_df = None if xg_only else (self.goals_k_metrics_full if self.goals_k_metrics_full is not None else self.goals_k_metrics)
         has_goals = goals_df is not None and len(goals_df) > 0
         has_xg = self.xg_k_metrics is not None and len(self.xg_k_metrics) > 0
         if not has_goals and not has_xg:
@@ -320,12 +320,12 @@ class BaselineResultsDashboard:
                 fig.update_yaxes(rangemode="tozero", row=row, col=col)
         return fig
 
-    def create_calibration_figure(self) -> Optional[Any]:
+    def create_calibration_figure(self, xg_only: bool = False) -> Optional[Any]:
         """Create Plotly reliability diagram from calibration_stats."""
         if not PLOTLY_AVAILABLE:
             return None
         cal_list = []
-        if self.goals_calibration is not None and len(self.goals_calibration) > 0:
+        if not xg_only and self.goals_calibration is not None and len(self.goals_calibration) > 0:
             cal_list.append(("Goals", self.goals_calibration))
         if self.xg_calibration is not None and len(self.xg_calibration) > 0:
             cal_list.append(("xG", self.xg_calibration))
@@ -357,10 +357,10 @@ class BaselineResultsDashboard:
             fig.update_yaxes(title_text="Actual rate", range=[0, 1], scaleanchor="x", scaleratio=1, row=1, col=c)
         return fig
 
-    def _section_overview(self) -> str:
+    def _section_overview(self, xg_only: bool = False) -> str:
         """Overview: best k, key metrics, output paths."""
         parts = []
-        if self.goals_summary:
+        if not xg_only and self.goals_summary:
             bp = self.goals_summary.get("best_params", {})
             best_k = bp.get("k_factor", self.goals_summary.get("best_k", "?"))
             parts.append(f"<p><b>Goals</b>: best k={best_k} | {self.base_dir / 'baseline_elo'}</p>")
@@ -368,20 +368,20 @@ class BaselineResultsDashboard:
             bp = self.xg_summary.get("best_params", {})
             best_k = bp.get("k_factor", self.xg_summary.get("best_k", "?"))
             parts.append(f"<p><b>xG</b>: best k={best_k} | {self.base_dir / 'baseline_elo_xg'}</p>")
-        if self.goals_val_comparison is not None and len(self.goals_val_comparison) > 0:
+        if not xg_only and self.goals_val_comparison is not None and len(self.goals_val_comparison) > 0:
             r = self.goals_val_comparison.iloc[0]
             parts.append(f"<p>Goals best: acc={r.get('win_accuracy', 0):.1%} brier={r.get('brier_loss', 0):.4f}</p>")
         if self.xg_val_comparison is not None and len(self.xg_val_comparison) > 0:
             r = self.xg_val_comparison.iloc[0]
             parts.append(f"<p>xG best: acc={r.get('win_accuracy', 0):.1%} brier={r.get('brier_loss', 0):.4f}</p>")
-        return "<h2>Overview</h2>" + ("".join(parts) if parts else "<p>No summary data.</p>")
+        return "<h2>Overview</h2>" + ("".join(parts) if parts else "<p>No data.</p>")
 
-    def _section_hyperparams(self) -> str:
+    def _section_hyperparams(self, xg_only: bool = False) -> str:
         """Hyperparameter comparison: best params table, full sweep table."""
         parts = ["<h2>Hyperparameters</h2>"]
-        if self.goals_summary or self.xg_summary:
+        if (not xg_only and self.goals_summary) or self.xg_summary:
             rows = []
-            if self.goals_summary:
+            if not xg_only and self.goals_summary:
                 bp = self.goals_summary.get("best_params", {})
                 rows.append({"Pipeline": "Goals", **{k: v for k, v in bp.items()}})
             if self.xg_summary:
@@ -391,7 +391,7 @@ class BaselineResultsDashboard:
                 df = pd.DataFrame(rows)
                 parts.append(f"<h3>Params</h3>{df.to_html(index=False)}")
         combined = []
-        if self.goals_sweep_comparison is not None and len(self.goals_sweep_comparison) > 0:
+        if not xg_only and self.goals_sweep_comparison is not None and len(self.goals_sweep_comparison) > 0:
             df = self.goals_sweep_comparison.copy()
             df["pipeline"] = "goals"
             if "model_iteration" in df.columns:
@@ -409,14 +409,14 @@ class BaselineResultsDashboard:
             parts.append(f"<h3>K-Sweep</h3>{sweep_df[cols].to_html(index=False)}")
         return "".join(parts)
 
-    def _section_validation(self) -> str:
+    def _section_validation(self, xg_only: bool = False) -> str:
         """Validation: baselines, significance, comparison, elo vs standings."""
         parts = ["<h2>Validation</h2>"]
-        if self.goals_baselines is not None:
+        if not xg_only and self.goals_baselines is not None:
             parts.append(f"<h3>Baselines (Goals)</h3>{self.goals_baselines.to_html(index=False)}")
         if self.xg_baselines is not None:
             parts.append(f"<h3>Baselines (xG)</h3>{self.xg_baselines.to_html(index=False)}")
-        if self.goals_significance is not None:
+        if not xg_only and self.goals_significance is not None:
             df = self.goals_significance.copy()
             df["significant"] = df["p_value"] < 0.05
             parts.append(f"<h3>Significance (Goals)</h3>{df.to_html(index=False)}")
@@ -424,32 +424,34 @@ class BaselineResultsDashboard:
             df = self.xg_significance.copy()
             df["significant"] = df["p_value"] < 0.05
             parts.append(f"<h3>Significance (xG)</h3>{df.to_html(index=False)}")
-        if self.goals_val_comparison is not None:
+        if not xg_only and self.goals_val_comparison is not None:
             parts.append(f"<h3>Elo vs Baselines (Goals)</h3>{self.goals_val_comparison.to_html(index=False)}")
         if self.xg_val_comparison is not None:
             parts.append(f"<h3>Elo vs Baselines (xG)</h3>{self.xg_val_comparison.to_html(index=False)}")
-        if self.goals_elo_vs_standings is not None:
+        if not xg_only and self.goals_elo_vs_standings is not None:
             parts.append(f"<h3>Elo vs Standings (Goals)</h3>{self.goals_elo_vs_standings.to_html(index=False)}")
         if self.xg_elo_vs_standings is not None:
             parts.append(f"<h3>Elo vs Standings (xG)</h3>{self.xg_elo_vs_standings.to_html(index=False)}")
         return "".join(parts) if len(parts) > 1 else parts[0]
 
-    def _section_rankings(self) -> str:
-        """Team rankings top 10 side-by-side."""
+    def _section_rankings(self, xg_only: bool = False) -> str:
+        """Team rankings: all teams side-by-side with rank."""
         parts = ["<h2>Rankings</h2><div style='display:flex;gap:2em'>"]
-        if self.goals_summary and "team_rankings" in self.goals_summary:
+        if not xg_only and self.goals_summary and "team_rankings" in self.goals_summary:
             tr = self.goals_summary["team_rankings"]
-            top = sorted(tr.items(), key=lambda x: -x[1])[:10]
-            parts.append(f"<div><h3>Goals</h3><table><tr><th>Team</th><th>Rating</th></tr>")
-            for t, r in top:
-                parts.append(f"<tr><td>{t}</td><td>{r:.1f}</td></tr>")
+            ranked = sorted(tr.items(), key=lambda x: -x[1])
+            n = len(ranked)
+            parts.append(f"<div><h3>Goals ({n} teams)</h3><table><tr><th>Rank</th><th>Team</th><th>Rating</th></tr>")
+            for i, (t, r) in enumerate(ranked, 1):
+                parts.append(f"<tr><td>{i}</td><td>{t}</td><td>{r:.1f}</td></tr>")
             parts.append("</table></div>")
         if self.xg_summary and "team_rankings" in self.xg_summary:
             tr = self.xg_summary["team_rankings"]
-            top = sorted(tr.items(), key=lambda x: -x[1])[:10]
-            parts.append(f"<div><h3>xG</h3><table><tr><th>Team</th><th>Rating</th></tr>")
-            for t, r in top:
-                parts.append(f"<tr><td>{t}</td><td>{r:.1f}</td></tr>")
+            ranked = sorted(tr.items(), key=lambda x: -x[1])
+            n = len(ranked)
+            parts.append(f"<div><h3>xG ({n} teams)</h3><table><tr><th>Rank</th><th>Team</th><th>Rating</th></tr>")
+            for i, (t, r) in enumerate(ranked, 1):
+                parts.append(f"<tr><td>{i}</td><td>{t}</td><td>{r:.1f}</td></tr>")
             parts.append("</table></div>")
         parts.append("</div>")
         return "".join(parts)
@@ -501,9 +503,9 @@ class BaselineResultsDashboard:
             return merged
         return pd.concat([g, x], axis=1)
 
-    def save_html(self, path: str) -> bool:
-        """Save comprehensive interactive HTML dashboard."""
-        fig = self.create_figure()
+    def save_html(self, path: str, xg_only: bool = False) -> bool:
+        """Save comprehensive interactive HTML dashboard. If xg_only, show only xG pipeline content."""
+        fig = self.create_figure(xg_only=xg_only)
         if fig is None:
             return False
 
@@ -511,21 +513,22 @@ class BaselineResultsDashboard:
         out.parent.mkdir(parents=True, exist_ok=True)
 
         sections = []
-        sections.append(self._section_overview())
-        sections.append(self._section_hyperparams())
+        sections.append(self._section_overview(xg_only=xg_only))
+        sections.append(self._section_hyperparams(xg_only=xg_only))
         sections.append("<h2>K vs Metrics</h2>" + fig.to_html(full_html=False, include_plotlyjs=False))
-        sections.append(self._section_validation())
+        sections.append(self._section_validation(xg_only=xg_only))
 
-        cal_fig = self.create_calibration_figure()
+        cal_fig = self.create_calibration_figure(xg_only=xg_only)
         if cal_fig is not None:
             sections.append("<h2>Calibration</h2>" + cal_fig.to_html(full_html=False, include_plotlyjs=False))
 
-        sections.append(self._section_rankings())
+        sections.append(self._section_rankings(xg_only=xg_only))
 
         r1 = self.create_r1_comparison_table()
         if r1 is not None and len(r1) > 0:
             sections.append(f"<h2>Round 1</h2>{r1.to_html(classes='table', index=False)}")
 
+        title = "Baseline Elo xG" if xg_only else "Baseline Elo"
         css = """
         <style>
         body { font-family: sans-serif; margin: 1.5em; max-width: 1400px; }
@@ -543,12 +546,12 @@ class BaselineResultsDashboard:
 <html>
 <head>
 <meta charset="utf-8">
-<title>Baseline Elo</title>
+<title>{title}</title>
 {css}
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
-<h1>Baseline Elo</h1>
+<h1>{title}</h1>
 {"".join(sections)}
 </body>
 </html>"""
@@ -614,14 +617,25 @@ class BaselineResultsDashboard:
         return True
 
 
-def run_dashboard(output_path: str = "output/predictions/baseline_dashboard.html"):
-    """CLI entry point: load and save dashboard."""
+def run_dashboard(
+    output_path: str = "output/predictions/baseline_dashboard.html",
+    xg_only: bool = False,
+    also_xg: bool = False,
+) -> int:
+    """CLI entry point: load and save dashboard. If also_xg, save both combined and xG-only."""
     dash = BaselineResultsDashboard()
     if not dash.load():
         print("No baseline k_metrics found. Run _run_baseline_elo_sweep.py and _run_baseline_elo_xg_sweep.py first.")
         return 1
+    ok = False
     if PLOTLY_AVAILABLE:
-        ok = dash.save_html(output_path)
+        ok = dash.save_html(output_path, xg_only=xg_only)
+        if also_xg and dash.xg_k_metrics is not None:
+            xg_path = str(Path(output_path).parent / "baseline_elo_xg_dashboard.html")
+            ok_xg = dash.save_html(xg_path, xg_only=True)
+            ok = ok or ok_xg
+            if ok_xg:
+                print(f"[OK] xG dashboard saved to {xg_path}")
     else:
         p = Path(output_path)
         ok = dash.save_matplotlib(str(p.with_suffix(".png")))
@@ -635,4 +649,5 @@ if __name__ == "__main__":
     _cwd = Path(os.path.abspath("")).resolve()
     if (_cwd / "python").is_dir():
         os.chdir(_cwd / "python")
-    sys.exit(run_dashboard())
+    also = "--xg" in sys.argv or "--also-xg" in sys.argv
+    sys.exit(run_dashboard(also_xg=also))

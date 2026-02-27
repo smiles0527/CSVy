@@ -18,6 +18,7 @@ from pathlib import Path
 # Target paths relative to repo root
 DASHBOARDS = [
     ("output/predictions/baseline_dashboard.html", "docs/dashboards/baseline.html"),
+    ("output/predictions/baseline_elo_xg_dashboard.html", "docs/dashboards/baseline_elo_xg.html"),
 ]
 
 

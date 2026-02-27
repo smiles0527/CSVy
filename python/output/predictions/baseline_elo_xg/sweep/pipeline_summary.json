@@ -1,141 +1,141 @@
 {
   "model": "BaselineEloXGSweep",
-  "best_k": 5.0,
+  "best_k": 3.6,
   "train_ratio": 0.7,
   "n_games": 1312,
   "n_train": 919,
   "n_test": 393,
   "best_params": {
-    "k_factor": 5.0,
+    "k_factor": 3.6,
     "initial_rating": 1200,
     "elo_scale": 400,
     "league_avg_goals": 3.0,
     "goal_diff_half_range": 6.0
   },
   "team_rankings": {
-    "thailand": 1314.8,
-    "brazil": 1291.0,
-    "pakistan": 1274.3,
-    "peru": 1272.9,
-    "mexico": 1270.0,
-    "netherlands": 1250.5,
-    "uk": 1248.5,
-    "china": 1245.5,
-    "panama": 1239.0,
-    "france": 1238.4,
-    "serbia": 1232.7,
-    "guatemala": 1222.0,
-    "india": 1218.9,
-    "new_zealand": 1206.3,
-    "canada": 1204.6,
-    "south_korea": 1203.3,
-    "morocco": 1191.7,
-    "germany": 1185.7,
-    "uae": 1178.5,
-    "ethiopia": 1174.3,
-    "saudi_arabia": 1167.6,
-    "philippines": 1165.0,
-    "oman": 1161.8,
-    "switzerland": 1155.3,
-    "kazakhstan": 1151.4,
-    "rwanda": 1149.0,
-    "iceland": 1147.6,
-    "usa": 1139.9,
-    "singapore": 1138.4,
-    "indonesia": 1130.3,
-    "vietnam": 1122.8,
-    "mongolia": 1108.0
+    "thailand": 1291.9,
+    "brazil": 1272.0,
+    "pakistan": 1260.9,
+    "peru": 1260.8,
+    "mexico": 1255.5,
+    "netherlands": 1241.2,
+    "uk": 1235.9,
+    "china": 1234.4,
+    "panama": 1232.9,
+    "france": 1232.5,
+    "serbia": 1226.5,
+    "guatemala": 1218.6,
+    "india": 1215.4,
+    "new_zealand": 1205.4,
+    "canada": 1204.5,
+    "south_korea": 1203.0,
+    "morocco": 1194.7,
+    "germany": 1189.0,
+    "uae": 1183.2,
+    "ethiopia": 1179.3,
+    "saudi_arabia": 1172.3,
+    "philippines": 1171.3,
+    "oman": 1169.7,
+    "switzerland": 1164.6,
+    "kazakhstan": 1161.9,
+    "rwanda": 1157.9,
+    "iceland": 1157.2,
+    "usa": 1152.0,
+    "singapore": 1150.5,
+    "indonesia": 1142.9,
+    "vietnam": 1136.3,
+    "mongolia": 1125.7
   },
   "predictions": [
     {
       "game": 1,
       "home_team": "brazil",
       "away_team": "kazakhstan",
-      "pred_home": 4.14,
-      "pred_away": 1.86,
+      "pred_home": 3.92,
+      "pred_away": 2.08,
       "predicted_winner": "brazil",
-      "confidence": 0.6908
+      "confidence": 0.6533
     },
     {
       "game": 2,
       "home_team": "netherlands",
       "away_team": "mongolia",
-      "pred_home": 4.17,
-      "pred_away": 1.83,
+      "pred_home": 3.96,
+      "pred_away": 2.04,
       "predicted_winner": "netherlands",
-      "confidence": 0.6943
+      "confidence": 0.6603
     },
     {
       "game": 3,
       "home_team": "peru",
       "away_team": "rwanda",
-      "pred_home": 4.03,
-      "pred_away": 1.97,
+      "pred_home": 3.86,
+      "pred_away": 2.14,
       "predicted_winner": "peru",
-      "confidence": 0.6711
+      "confidence": 0.6439
     },
     {
       "game": 4,
       "home_team": "thailand",
       "away_team": "oman",
-      "pred_home": 4.24,
-      "pred_away": 1.76,
+      "pred_home": 4.01,
+      "pred_away": 1.99,
       "predicted_winner": "thailand",
-      "confidence": 0.7071
+      "confidence": 0.6689
     },
     {
       "game": 5,
       "home_team": "pakistan",
       "away_team": "germany",
-      "pred_home": 3.75,
-      "pred_away": 2.25,
+      "pred_home": 3.61,
+      "pred_away": 2.39,
       "predicted_winner": "pakistan",
-      "confidence": 0.6248
+      "confidence": 0.602
     },
     {
       "game": 6,
       "home_team": "india",
       "away_team": "usa",
-      "pred_home": 3.67,
-      "pred_away": 2.33,
+      "pred_home": 3.54,
+      "pred_away": 2.46,
       "predicted_winner": "india",
-      "confidence": 0.6118
+      "confidence": 0.5902
     },
     {
       "game": 7,
       "home_team": "panama",
       "away_team": "switzerland",
-      "pred_home": 3.71,
-      "pred_away": 2.29,
+      "pred_home": 3.58,
+      "pred_away": 2.42,
       "predicted_winner": "panama",
-      "confidence": 0.6181
+      "confidence": 0.597
     },
     {
       "game": 8,
       "home_team": "iceland",
       "away_team": "canada",
-      "pred_home": 2.51,
-      "pred_away": 3.49,
+      "pred_home": 2.59,
+      "pred_away": 3.41,
       "predicted_winner": "canada",
-      "confidence": 0.5813
+      "confidence": 0.5676
     },
     {
       "game": 9,
       "home_team": "china",
       "away_team": "france",
-      "pred_home": 3.06,
-      "pred_away": 2.94,
+      "pred_home": 3.02,
+      "pred_away": 2.98,
       "predicted_winner": "china",
-      "confidence": 0.5102
+      "confidence": 0.5027
     },
     {
       "game": 10,
       "home_team": "philippines",
       "away_team": "morocco",
-      "pred_home": 2.77,
-      "pred_away": 3.23,
+      "pred_home": 2.8,
+      "pred_away": 3.2,
       "predicted_winner": "morocco",
-      "confidence": 0.5384
+      "confidence": 0.5337
     },
     {
       "game": 11,
@@ -144,52 +144,52 @@
       "pred_home": 3.06,
       "pred_away": 2.94,
       "predicted_winner": "ethiopia",
-      "confidence": 0.5096
+      "confidence": 0.5101
     },
     {
       "game": 12,
       "home_team": "singapore",
       "away_team": "new_zealand",
-      "pred_home": 2.42,
-      "pred_away": 3.58,
+      "pred_home": 2.53,
+      "pred_away": 3.47,
       "predicted_winner": "new_zealand",
-      "confidence": 0.5965
+      "confidence": 0.5784
     },
     {
       "game": 13,
       "home_team": "guatemala",
       "away_team": "south_korea",
-      "pred_home": 3.16,
-      "pred_away": 2.84,
+      "pred_home": 3.13,
+      "pred_away": 2.87,
       "predicted_winner": "guatemala",
-      "confidence": 0.5268
+      "confidence": 0.5223
     },
     {
       "game": 14,
       "home_team": "uk",
       "away_team": "mexico",
-      "pred_home": 2.81,
-      "pred_away": 3.19,
+      "pred_home": 2.83,
+      "pred_away": 3.17,
       "predicted_winner": "mexico",
-      "confidence": 0.5309
+      "confidence": 0.5282
     },
     {
       "game": 15,
       "home_team": "vietnam",
       "away_team": "serbia",
-      "pred_home": 2.08,
-      "pred_away": 3.92,
+      "pred_home": 2.24,
+      "pred_away": 3.76,
       "predicted_winner": "serbia",
-      "confidence": 0.6532
+      "confidence": 0.627
     },
     {
       "game": 16,
       "home_team": "indonesia",
       "away_team": "uae",
-      "pred_home": 2.59,
-      "pred_away": 3.41,
+      "pred_home": 2.65,
+      "pred_away": 3.35,
       "predicted_winner": "uae",
-      "confidence": 0.5689
+      "confidence": 0.5577
     }
   ]
 }

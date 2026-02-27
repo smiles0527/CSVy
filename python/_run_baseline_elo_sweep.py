@@ -71,7 +71,8 @@ config = _config_pre
 
 data_cfg = config.get('data', {})
 val_cfg = config.get('validation', {})
-iterations_cfg = config.get('iterations', {}).copy()
+_raw_iter = config.get('iterations', {})
+iterations_cfg = {str(k): v for k, v in _raw_iter.items()}
 if config.get('quick_test'):
     iterations_cfg = {'1.0': {'min': 5, 'max': 20, 'step': 5}, '1.1': {'min': 5, 'max': 20, 'step': 5}, '2.0': {'min': 5, 'max': 30, 'step': 5}}
 hp = config.get('hyperparameters', {})

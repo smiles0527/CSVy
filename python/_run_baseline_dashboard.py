@@ -22,4 +22,4 @@ from utils.baseline_results_dashboard import run_dashboard
 
 if __name__ == "__main__":
     out = pathlib.Path("output/predictions/baseline_dashboard.html")
-    sys.exit(run_dashboard(str(out)))
+    sys.exit(run_dashboard(str(out), also_xg=True))
