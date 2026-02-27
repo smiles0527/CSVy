@@ -1,0 +1,49 @@
+# Baseline Elo xG - All settings configurable (edit this file, no coding needed)
+# =============================================================================
+# Same as Baseline Elo but uses expected goals (xG) instead of actual goals for
+# outcomes, aggregation, and evaluation.
+
+model_name: model_baseline_elo_xg
+description: Classic Elo using xG (expected goals) for benchmarking
+
+# -----------------------------------------------------------------------------
+# DATA - which files to use
+# -----------------------------------------------------------------------------
+data:
+  csv_path: data/whl_2025.csv       # Training data (shift-level, aggregate home_xg/away_xg)
+  matchups_path: data/WHSDSC_Rnd1_matchups.xlsx   # Round 1 matchups to predict
+
+# -----------------------------------------------------------------------------
+# VALIDATION - train/test split (adjust for quick tests)
+# -----------------------------------------------------------------------------
+validation:
+  train_ratio: 0.7
+  n_runs: 3
+
+# -----------------------------------------------------------------------------
+# HYPERPARAMETERS - k_factor, initial_rating, and formula constants
+# -----------------------------------------------------------------------------
+hyperparameters:
+  k_factor: {min: 5, max: 100, step: 5}
+  initial_rating: [1200]
+  elo_scale: 400
+  league_avg_goals: 3.0
+  goal_diff_half_range: 6.0
+
+# Defaults (used when loading a saved model)
+defaults:
+  k_factor: 5
+  initial_rating: 1200
+  elo_scale: 400
+  league_avg_goals: 3.0
+  goal_diff_half_range: 6.0
+
+# -----------------------------------------------------------------------------
+# OUTPUT - organized in xg/ subfolder
+# -----------------------------------------------------------------------------
+output:
+  out_dir: output/predictions/baseline_elo_xg/xg
+  comparison_csv: output/predictions/baseline_elo_xg/xg/comparison.csv
+  k_metrics_csv: output/predictions/baseline_elo_xg/xg/k_metrics.csv
+  round1_csv: output/predictions/baseline_elo_xg/xg/round1_predictions.csv
+  summary_json: output/predictions/baseline_elo_xg/xg/pipeline_summary.json

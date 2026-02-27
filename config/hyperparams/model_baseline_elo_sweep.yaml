@@ -1,0 +1,60 @@
+# Baseline Elo Sweep - Unified k-sweep across iterations 1.0, 1.1, 2.0
+# =====================================================================
+
+model_name: model_baseline_elo_sweep
+description: K-value sweep for iterations 1.0 (goals), 1.1 (xG), 2.0 (Off/Def Elo)
+
+# -----------------------------------------------------------------------------
+# DATA
+# -----------------------------------------------------------------------------
+data:
+  csv_path: data/whl_2025.csv
+  matchups_path: data/WHSDSC_Rnd1_matchups.xlsx
+
+# -----------------------------------------------------------------------------
+# VALIDATION
+# -----------------------------------------------------------------------------
+validation:
+  train_ratio: 0.7
+  n_runs: 1
+
+# -----------------------------------------------------------------------------
+# ITERATIONS - k ranges per model iteration
+# Set quick_test: true to use smaller ranges for fast validation
+# -----------------------------------------------------------------------------
+quick_test: true
+iterations:
+  1.0: { min: 0.1, max: 35, step: 0.1 }
+  1.1: { min: 0.1, max: 35, step: 0.1 }
+  2.0: { min: 0.1, max: 100, step: 0.1 }
+
+# -----------------------------------------------------------------------------
+# FORMULA CONSTANTS (shared)
+# -----------------------------------------------------------------------------
+hyperparameters:
+  initial_rating: 1200
+  elo_scale: 400
+  league_avg_goals: 3.0
+  goal_diff_half_range: 6.0
+
+# -----------------------------------------------------------------------------
+# OUTPUT - organized into subfolders
+# -----------------------------------------------------------------------------
+output:
+  out_dir: output/predictions/baseline_elo
+  # Sweep outputs (k-grid, round1, summary)
+  sweep_dir: output/predictions/baseline_elo/sweep
+  comparison_csv: output/predictions/baseline_elo/sweep/comparison.csv
+  k_metrics_csv: output/predictions/baseline_elo/sweep/k_metrics.csv
+  round1_csv: output/predictions/baseline_elo/sweep/round1_predictions.csv
+  summary_json: output/predictions/baseline_elo/sweep/pipeline_summary.json
+  # Validation outputs
+  validation_dir: output/predictions/baseline_elo/validation
+  validation_baselines_csv: output/predictions/baseline_elo/validation/baselines.csv
+  validation_comparison_csv: output/predictions/baseline_elo/validation/comparison.csv
+  validation_significance_csv: output/predictions/baseline_elo/validation/significance.csv
+  calibration_stats_csv: output/predictions/baseline_elo/validation/calibration_stats.csv
+  elo_vs_standings_csv: output/predictions/baseline_elo/validation/elo_vs_standings.csv
+  validation_summary_md: output/predictions/baseline_elo/validation/summary.md
+  # Plots
+  plots_dir: output/predictions/baseline_elo/plots

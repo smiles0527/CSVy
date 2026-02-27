@@ -49,13 +49,14 @@ defaults:
   goal_diff_half_range: 6.0
 
 # -----------------------------------------------------------------------------
-# OUTPUT - where to save results
+# OUTPUT - organized in goals/ subfolder
 # -----------------------------------------------------------------------------
 output:
-  comparison_csv: output/predictions/baseline_elo/baseline_elo_comparison.csv
-  k_metrics_csv: output/predictions/baseline_elo/baseline_elo_k_metrics.csv
-  round1_csv: output/predictions/baseline_elo/round1_baseline_elo_predictions.csv
-  summary_json: output/predictions/baseline_elo/baseline_elo_pipeline_summary.json
+  out_dir: output/predictions/baseline_elo/goals
+  comparison_csv: output/predictions/baseline_elo/goals/comparison.csv
+  k_metrics_csv: output/predictions/baseline_elo/goals/k_metrics.csv
+  round1_csv: output/predictions/baseline_elo/goals/round1_predictions.csv
+  summary_json: output/predictions/baseline_elo/goals/pipeline_summary.json
 
 # -----------------------------------------------------------------------------
 # QUICK TEST PRESETS - copy these into validation/hyperparameters to test faster

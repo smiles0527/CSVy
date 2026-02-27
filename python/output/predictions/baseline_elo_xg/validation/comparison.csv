@@ -1,0 +1,2 @@
+win_accuracy,brier_loss,log_loss,beats_constant_50_acc,beats_brier,beats_log
+0.628498727735369,0.23581937896253827,0.6645568207581941,True,True,True

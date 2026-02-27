@@ -1,0 +1,39 @@
+# Baseline Elo xG Sweep - K-sweep with validation and plots
+# ==========================================================
+
+model_name: model_baseline_elo_xg_sweep
+description: K-value sweep for xG Elo with validation and plots
+
+# -----------------------------------------------------------------------------
+# DATA
+# -----------------------------------------------------------------------------
+data:
+  csv_path: data/whl_2025.csv
+  matchups_path: data/WHSDSC_Rnd1_matchups.xlsx
+
+# -----------------------------------------------------------------------------
+# VALIDATION
+# -----------------------------------------------------------------------------
+validation:
+  train_ratio: 0.7
+  n_runs: 1
+
+# -----------------------------------------------------------------------------
+# K RANGE - same structure as baseline_elo
+# -----------------------------------------------------------------------------
+quick_test: false
+hyperparameters:
+  k_factor: { min: 5, max: 100, step: 5 }
+  initial_rating: 1200
+  elo_scale: 400
+  league_avg_goals: 3.0
+  goal_diff_half_range: 6.0
+
+# -----------------------------------------------------------------------------
+# OUTPUT - same structure as baseline_elo (sweep, validation, plots)
+# -----------------------------------------------------------------------------
+output:
+  out_dir: output/predictions/baseline_elo_xg
+  sweep_dir: output/predictions/baseline_elo_xg/sweep
+  validation_dir: output/predictions/baseline_elo_xg/validation
+  plots_dir: output/predictions/baseline_elo_xg/plots

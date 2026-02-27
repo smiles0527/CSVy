@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run baseline_elo pipeline (no matplotlib display)."""
+"""Run baseline_elo_xg pipeline (xG-based outcomes, no matplotlib display)."""
 import pandas as pd
 import numpy as np
 import yaml
@@ -18,11 +18,11 @@ else: raise RuntimeError('Cannot locate python/')
 
 os.chdir(_python_dir)
 sys.path.insert(0, str(_python_dir))
-from utils.baseline_elo import BaselineEloModel
+from utils.baseline_elo_xg import BaselineEloXGModel
 
 # Load config from YAML (proj_root has config/)
 proj_root = _python_dir if (_python_dir / 'config').is_dir() else _python_dir.parent
-config_path = proj_root / 'config' / 'hyperparams' / 'model_baseline_elo.yaml'
+config_path = proj_root / 'config' / 'hyperparams' / 'model_baseline_elo_xg.yaml'
 config = None
 if config_path.exists():
     with open(config_path, 'r') as f:
@@ -59,28 +59,28 @@ param_grid = dict(
 )
 _formula_defaults = {'elo_scale': 400, 'league_avg_goals': 3.0, 'goal_diff_half_range': 6.0}
 formula_constants = {k: hp.get(k, _formula_defaults[k]) for k in FORMULA_KEYS}
-out_dir = pathlib.Path(out_cfg.get('out_dir', 'output/predictions/baseline_elo/goals'))
+
+# Output paths - xG-specific, from config or fallback
+out_dir = pathlib.Path(out_cfg.get('out_dir', 'output/predictions/baseline_elo_xg/xg'))
 comp_csv = out_cfg.get('comparison_csv', str(out_dir / 'comparison.csv'))
 k_csv = out_cfg.get('k_metrics_csv', str(out_dir / 'k_metrics.csv'))
 r1_csv = out_cfg.get('round1_csv', str(out_dir / 'round1_predictions.csv'))
 summary_json = out_cfg.get('summary_json', str(out_dir / 'pipeline_summary.json'))
 
+# Aggregate shifts -> games with home_xg, away_xg
 raw = pd.read_csv(csv_path)
 games_df = raw.groupby('game_id').agg(
-    home_team=('home_team','first'), away_team=('away_team','first'),
-    home_goals=('home_goals','sum'), away_goals=('away_goals','sum'),
-    went_ot=('went_ot','max')).reset_index()
+    home_team=('home_team', 'first'), away_team=('away_team', 'first'),
+    home_xg=('home_xg', 'sum'), away_xg=('away_xg', 'sum'),
+    went_ot=('went_ot', 'max')).reset_index()
 extracted = games_df['game_id'].astype(str).str.extract(r'(\d+)')
 games_df['game_num'] = pd.to_numeric(extracted[0], errors='coerce').fillna(0).astype(int)
 games_df = games_df.sort_values('game_num').reset_index(drop=True)
 
 n = len(games_df)
-test_size = int(n * (1 - train_ratio))  # 30% test
+test_size = int(n * (1 - train_ratio))
 def get_fold_splits(games_df, fold):
     """Block holdout: train ~70%, test ~30%. 3 folds = 3 different block positions."""
-    # Fold 0: train first 70%, test last 30%
-    # Fold 1: train first 35% + last 35%, test middle 30%
-    # Fold 2: train last 70%, test first 30%
     if fold == 0:
         train = games_df.iloc[: n - test_size].copy()
         test = games_df.iloc[n - test_size :].copy()
@@ -101,11 +101,11 @@ results = []
 for vals in combos:
     params = dict(zip(keys, vals))
     params.update(formula_constants)
-    m = BaselineEloModel(params)
+    m = BaselineEloXGModel(params)
     m.fit(train_df)
     met = m.evaluate(test_df)
-    brier_loss, log_loss = BaselineEloModel.compute_brier_logloss(m, test_df)
-    results.append({'config': f"BaselineElo(k={params['k_factor']},init=1200)", **params, **met, 'brier_loss': brier_loss, 'log_loss': log_loss})
+    brier_loss, log_loss = BaselineEloXGModel.compute_brier_logloss(m, test_df)
+    results.append({'config': f"BaselineEloXG(k={params['k_factor']},init=1200)", **params, **met, 'brier_loss': brier_loss, 'log_loss': log_loss})
 results_df = pd.DataFrame(results).sort_values('combined_rmse')
 best_params = {'k_factor': int(results_df.iloc[0]['k_factor']), 'initial_rating': 1200, **formula_constants}
 k_metrics_df = results_df[['k_factor', 'win_accuracy', 'brier_loss', 'log_loss']].rename(
@@ -127,7 +127,7 @@ print(f'\n[OK] {len(results_df)} configs. Best: k={best_params["k_factor"]}, ini
 per_run = []
 for fold in range(n_folds):
     train_f, test_f = get_fold_splits(games_df, fold)
-    m = BaselineEloModel(best_params)  # best_params includes formula_constants
+    m = BaselineEloXGModel(best_params)
     m.fit(train_f)
     met = m.evaluate(test_f)
     per_run.append(met)
@@ -139,7 +139,7 @@ print(f'\nSummary (mean +/- std over {n_folds} runs):')
 print(f'  Combined RMSE:  {rmse_m:.4f} +/- {rmse_s:.4f}')
 print(f'  Win Accuracy:   {acc_m:.1%} +/- {acc_s:.1%}')
 
-final = BaselineEloModel(best_params)
+final = BaselineEloXGModel(best_params)
 final.fit(games_df)
 print(f'\nTeam Rankings (top 10):')
 for r, (t, elo) in enumerate(final.get_rankings(10), 1):
@@ -155,16 +155,16 @@ for i, row in matchups.iterrows():
     g = {'home_team': row[hc], 'away_team': row[ac]}
     h, a = final.predict_goals(g)
     w, c = final.predict_winner(g)
-    preds.append({'game': i+1, 'home_team': row[hc], 'away_team': row[ac], 'pred_home_goals': round(h, 2),
-                  'pred_away_goals': round(a, 2), 'predicted_winner': w, 'confidence': round(c, 4)})
-    print(f'  {i+1:2d}. {row[hc]:15s} vs {row[ac]:15s} -> {w} ({c:.1%}) pred {h:.1f}-{a:.1f}')
+    preds.append({'game': i+1, 'home_team': row[hc], 'away_team': row[ac], 'pred_home_xg': round(h, 2),
+                  'pred_away_xg': round(a, 2), 'predicted_winner': w, 'confidence': round(c, 4)})
+    print(f'  {i+1:2d}. {row[hc]:15s} vs {row[ac]:15s} -> {w} ({c:.1%}) pred {h:.1f}-{a:.1f} xG')
 
 pred_df = pd.DataFrame(preds)
 pred_df.to_csv(r1_csv, index=False)
 print(f'\n[OK] {r1_csv}')
 
 summary = {
-    'model': 'BaselineElo',
+    'model': 'BaselineEloXG',
     'train_ratio': val_cfg.get('train_ratio', 0.7),
     'n_runs': n_folds,
     'multi_run_metrics': {
