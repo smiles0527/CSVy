@@ -440,12 +440,15 @@ print(f'[OK] {r1_csv}')
 
 # Per-iteration team rankings (so dashboard shows correct data for 1.0/1.1/2.0)
 team_rankings_by_iteration = {}
+model_2 = None
 for it in ['1.0', '1.1', '2.0']:
     row = best_per_iter[best_per_iter['model_iteration'] == it].iloc[0]
     params = {'k_factor': row['k'], **formula_constants}
     m = ITERATION_CONFIG[it]['model_class'](params)
     m.fit(train_raw if it == '2.0' and train_raw is not None else train_df)
     team_rankings_by_iteration[it] = {t: round(r, 1) for t, r in m.get_rankings()}
+    if it == '2.0':
+        model_2 = m
 
 # Rating histograms: one per iteration (1.0, 1.1, 2.0)
 fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
@@ -465,7 +468,7 @@ fig.savefig(plots_dir / 'rating_histograms.png', dpi=120, bbox_inches='tight')
 plt.close()
 print(f'[OK] {plots_dir / "rating_histograms.png"}')
 
-# Pipeline summary
+# Pipeline summary (include full O/D per line for 2.0)
 summary = {
     'model': 'BaselineEloSweep',
     'iterations': ['1.0', '1.1', '2.0'],
@@ -480,6 +483,42 @@ summary = {
     'team_rankings_by_iteration': team_rankings_by_iteration,
     'predictions': preds,
 }
+# League-level data (never hidden)
+summary['league_metadata'] = {
+    'n_games': len(games_df),
+    'league_avg_goals_per_game': float((games_df['home_goals'].sum() + games_df['away_goals'].sum()) / max(1, len(games_df))),
+    'league_avg_xg_per_game': float((games_df['home_xg'].sum() + games_df['away_xg'].sum()) / max(1, len(games_df))),
+    'league_avg_goals_per_team_per_game': float((games_df['home_goals'].sum() + games_df['away_goals'].sum()) / (2 * max(1, len(games_df)))),
+    'league_avg_xg_per_team_per_game': float((games_df['home_xg'].sum() + games_df['away_xg'].sum()) / (2 * max(1, len(games_df)))),
+}
+if model_2 is not None and hasattr(model_2, 'league_avg_xg') and model_2.league_avg_xg is not None:
+    summary['league_metadata']['league_avg_xg_per_hour_5v5'] = round(model_2.league_avg_xg, 4)
+
+# Add full O/D for 2.0
+if model_2 is not None and hasattr(model_2, 'get_line_ratings'):
+    summary['line_ratings'] = model_2.get_line_ratings()
+
+# Write O/D CSV for 2.0
+if model_2 is not None and hasattr(model_2, 'get_line_ratings'):
+    lr = model_2.get_line_ratings()
+    rows = []
+    for team in sorted(lr.keys()):
+        o = lr[team]['O']
+        d = lr[team]['D']
+        rows.append({
+            'team': team,
+            'O_first_off': o.get('first_off', 0), 'D_first_off': d.get('first_off', 0),
+            'O_second_off': o.get('second_off', 0), 'D_second_off': d.get('second_off', 0),
+            'net_L1': round(o.get('first_off', 0) - d.get('first_off', 0), 1),
+            'net_L2': round(o.get('second_off', 0) - d.get('second_off', 0), 1),
+        })
+    pd.DataFrame(rows).to_csv(sweep_dir / 'offdef_line_ratings.csv', index=False)
+    print(f'[OK] {sweep_dir / "offdef_line_ratings.csv"}')
+# Write league_metadata as standalone file (never hide)
+lm_path = sweep_dir / 'league_metadata.json'
+with open(lm_path, 'w') as f:
+    json.dump(summary['league_metadata'], f, indent=2)
+print(f'[OK] {lm_path}')
 summary_path = pathlib.Path(out_cfg.get('summary_json', str(sweep_dir / 'pipeline_summary.json')))
 with open(summary_path, 'w') as f:
     json.dump(summary, f, indent=2)

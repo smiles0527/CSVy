@@ -303,6 +303,7 @@ class BaselineResultsDashboard:
 <a href="#validation">Validation</a>
 <a href="#calibration">Calibration</a>
 <a href="#rankings">Rankings</a>
+<a href="#od-by-line">O/D by line</a>
 <a href="#round1">Round 1</a>
 <span style="color:#666;font-size:0.85em;margin-left:1em">Tip: Copy TSV → paste in Vernier/Excel</span>
 </nav>"""
@@ -515,6 +516,16 @@ class BaselineResultsDashboard:
     def _section_overview(self, xg_only: bool = False, iteration: Optional[str] = None) -> str:
         """Overview: best k, key metrics, output paths."""
         parts = []
+        # League scoring data (never hidden)
+        lm = (self.goals_summary or {}).get('league_metadata', {})
+        if not lm and (self.goals_sweep / 'league_metadata.json').exists():
+            lm = json.loads((self.goals_sweep / 'league_metadata.json').read_text(encoding='utf-8'))
+        if lm:
+            tbl = '<table><tr><th>Metric</th><th>Value</th></tr>'
+            for k, v in lm.items():
+                tbl += f'<tr><td>{k}</td><td>{v}</td></tr>'
+            tbl += '</table>'
+            parts.append(f'<h3>League scoring (from data)</h3>{self._wrap_table(tbl)}')
         if not xg_only and self.goals_summary and (iteration is None or iteration in ("1.0", "1.1", "2.0")):
             labels = {"1.0": "Goals", "1.1": "xG", "2.0": "Off/Def"}
             lab = labels.get(iteration) if iteration else "Goals"
@@ -643,6 +654,21 @@ class BaselineResultsDashboard:
             tbl += "</table>"
             parts.append(f'<div><h3>xG ({n} teams)</h3>{self._wrap_table(tbl)}</div>')
         parts.append("</div>")
+        # Full O[] and D[] per team (always shown when available)
+        if self.goals_summary and "line_ratings" in self.goals_summary:
+            lr = self.goals_summary["line_ratings"]
+            rows = []
+            for team in sorted(lr.keys()):
+                o, d = lr[team]["O"], lr[team]["D"]
+                rows.append({
+                    "Team": team,
+                    "O_first_off": o.get("first_off", ""), "D_first_off": d.get("first_off", ""),
+                    "O_second_off": o.get("second_off", ""), "D_second_off": d.get("second_off", ""),
+                    "Net_L1": round(o.get("first_off", 0) - d.get("first_off", 0), 1),
+                    "Net_L2": round(o.get("second_off", 0) - d.get("second_off", 0), 1),
+                })
+            od_df = pd.DataFrame(rows)
+            parts.append(f'<h3 id="od-by-line">O[] and D[] by line (2.0 Off/Def)</h3>{self._wrap_table(od_df.to_html(index=False))}')
         return "".join(parts)
 
     def _section_all_teams(self, r1: pd.DataFrame, xg_only: bool = False, iteration: Optional[str] = None) -> str:

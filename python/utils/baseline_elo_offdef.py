@@ -301,6 +301,17 @@ class BaselineEloOffDefModel:
             'n_games': n,
         }
 
+    def get_line_ratings(self) -> Dict[str, Dict[str, Dict[str, float]]]:
+        """Full O and D per team per line. Returns {team: {'O': {line: rating}, 'D': {line: rating}}}."""
+        teams = set(self.O.keys()) | set(self.D.keys())
+        out = {}
+        for t in teams:
+            out[t] = {
+                'O': {line: round(self.O.get(t, {}).get(line, self.base_elo), 1) for line in VALID_LINES},
+                'D': {line: round(self.D.get(t, {}).get(line, self.base_elo), 1) for line in VALID_LINES},
+            }
+        return out
+
     def get_rankings(self, top_n: Optional[int] = None) -> List[Tuple[str, float]]:
         """Sorted list of (team, net_strength). net_strength = avg(O - D) over lines."""
         teams = set(self.O.keys()) | set(self.D.keys())

@@ -5,22 +5,22 @@
 - League avg: Brier~0.25, Log~0.6931
 
 ## Best per iteration vs baselines
-- **1.0** (k=3.2): acc=53.2%, brier=0.2491, log=0.6913
+- **1.0** (k=5.0): acc=53.4%, brier=0.2495, log=0.6922
   - Beats constant 50% acc: True
   - Beats Brier baseline: True
-- **1.1** (k=3.6): acc=62.6%, brier=0.2386, log=0.6702
+- **1.1** (k=5.0): acc=62.8%, brier=0.2358, log=0.6646
   - Beats constant 50% acc: True
   - Beats Brier baseline: True
-- **2.0** (k=3.1): acc=64.9%, brier=0.2445, log=0.6821
+- **2.0** (k=5.0): acc=65.1%, brier=0.2422, log=0.6774
   - Beats constant 50% acc: True
   - Beats Brier baseline: True
 
 ## Statistical significance (win accuracy > 50%)
-- 1.0: p=0.1130 (not significant)
+- 1.0: p=0.0948 (not significant)
 - 1.1: p=0.0000 (significant)
 - 2.0: p=0.0000 (significant)
 
 ## Elo vs standings (Spearman)
-- 1.0: r=0.8677, p=0.0000
-- 1.1: r=0.5656, p=0.0007
-- 2.0: r=0.0345, p=0.8515
+- 1.0: r=0.8625, p=0.0000
+- 1.1: r=0.5652, p=0.0007
+- 2.0: r=0.0440, p=0.8111
