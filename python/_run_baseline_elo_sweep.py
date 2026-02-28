@@ -162,6 +162,11 @@ if _use_live:
 else:
     _plotter = None
 
+# For 2.0 (Off/Def): use shift-level data when home_off_line, away_off_line, toi exist
+raw_has_lines = all(c in raw.columns for c in ['home_off_line', 'away_off_line', 'toi'])
+train_raw = raw[raw['game_id'].isin(train_df['game_id'])] if raw_has_lines else None
+test_raw = raw[raw['game_id'].isin(test_df['game_id'])] if raw_has_lines else None
+
 _step_idx = 0
 for model_iteration, cfg in ITERATION_CONFIG.items():
     k_range = _expand_param(iterations_cfg.get(model_iteration), [5, 10, 15, 20])
@@ -170,7 +175,10 @@ for model_iteration, cfg in ITERATION_CONFIG.items():
     for k in k_range:
         params = {'k_factor': k, **formula_constants}
         m = model_class(params)
-        m.fit(train_df)
+        if model_iteration == '2.0' and train_raw is not None:
+            m.fit(train_raw)
+        else:
+            m.fit(train_df)
         met = m.evaluate(test_df)
         brier_loss, log_loss = model_class.compute_brier_logloss(m, test_df)
         results.append({
@@ -307,7 +315,7 @@ print(f'[OK] {validation_dir / "comparison.csv"}')
 final_model_class = ITERATION_CONFIG[best_iteration]['model_class']
 final_params = {'k_factor': best_k, **formula_constants}
 final_model = final_model_class(final_params)
-final_model.fit(train_df)
+final_model.fit(train_raw if best_iteration == '2.0' and train_raw is not None else train_df)
 
 pred_probs = []
 actual_wins = []
@@ -366,7 +374,7 @@ for it in ['1.0', '1.1', '2.0']:
     best_row = results_df[results_df['model_iteration'] == it].iloc[0]
     params = {'k_factor': best_row['k'], **formula_constants}
     m = ITERATION_CONFIG[it]['model_class'](params)
-    m.fit(train_df)
+    m.fit(train_raw if it == '2.0' and train_raw is not None else train_df)
     elo_rank = {t: r for r, (t, _) in enumerate(m.get_rankings(), 1)}
     common = [t for t in elo_rank if t in standings_rank]
     if len(common) >= 3:
@@ -412,7 +420,7 @@ print(f'[OK] {validation_dir / "summary.md"}')
 matchups = pd.read_excel(matchups_path)
 hc = [c for c in matchups.columns if 'home' in c.lower()][0]
 ac = [c for c in matchups.columns if 'away' in c.lower()][0]
-final_model.fit(games_df)
+final_model.fit(raw if best_iteration == '2.0' and raw_has_lines else games_df)
 preds = []
 for i, row in matchups.iterrows():
     g = {'home_team': row[hc], 'away_team': row[ac]}
@@ -436,8 +444,26 @@ for it in ['1.0', '1.1', '2.0']:
     row = best_per_iter[best_per_iter['model_iteration'] == it].iloc[0]
     params = {'k_factor': row['k'], **formula_constants}
     m = ITERATION_CONFIG[it]['model_class'](params)
-    m.fit(train_df)
+    m.fit(train_raw if it == '2.0' and train_raw is not None else train_df)
     team_rankings_by_iteration[it] = {t: round(r, 1) for t, r in m.get_rankings()}
+
+# Rating histograms: one per iteration (1.0, 1.1, 2.0)
+fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
+labels = {'1.0': 'Goals', '1.1': 'xG', '2.0': 'Off/Def'}
+colors = {'1.0': '#1f77b4', '1.1': '#ff7f0e', '2.0': '#2ca02c'}
+for idx, it in enumerate(['1.0', '1.1', '2.0']):
+    ratings = list(team_rankings_by_iteration[it].values())
+    axes[idx].hist(ratings, bins=15, edgecolor='black', alpha=0.7, color=colors[it])
+    axes[idx].set_xlabel('Rating')
+    axes[idx].set_ylabel('Count (teams)' if idx == 0 else '')
+    axes[idx].set_title(f'{labels[it]} (iteration {it})')
+    axes[idx].axvline(1200, color='gray', linestyle='--', alpha=0.7, label='Base 1200')
+    axes[idx].legend()
+fig.suptitle('Team rating distributions by iteration')
+fig.tight_layout()
+fig.savefig(plots_dir / 'rating_histograms.png', dpi=120, bbox_inches='tight')
+plt.close()
+print(f'[OK] {plots_dir / "rating_histograms.png"}')
 
 # Pipeline summary
 summary = {

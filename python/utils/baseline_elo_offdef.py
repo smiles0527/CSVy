@@ -1,21 +1,22 @@
 """
 Baseline Elo Offensive/Defensive Model - Iteration 2.0
 ======================================================
-Separate offensive (O) and defensive (D) Elo ratings per team. Updates driven by
-observed xG vs expected xG. Same interface as BaselineEloXGModel for comparison.
+Separate offensive (O) and defensive (D) Elo ratings per team, per line (line 1 and line 2).
+Updates driven by observed xG vs expected xG. Uses expected wins/losses (xG) not actual goals.
+
+2 sets per team: line 1 (O1, D1) and line 2 (O2, D2).
 
 Formulas:
-  multi = 10^((O_attacker - D_defender) / 400)
-  expected_xG = league_avg_xG * multi * time
+  multi = 10^((O - D) / 400)
+  expected_xG = league_avg * multi * time
   O += k * (observed_xG - expected_xG) / ln(10)
   D -= k * (observed_xG - expected_xG) / ln(10)
 
 Usage:
     from utils.baseline_elo_offdef import BaselineEloOffDefModel
     model = BaselineEloOffDefModel(params)
-    model.fit(games_df)  # must have home_xg, away_xg
-    metrics = model.evaluate(test_df)
-    h, a = model.predict_goals(game)
+    model.fit(shifts_df)  # shift-level with home_off_line, away_off_line, toi
+    # or model.fit(games_df) for game-level fallback (treats as single line)
 """
 
 from typing import Dict, List, Tuple, Optional, Any
@@ -25,12 +26,19 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 LN10 = np.log(10)
 
+# Line identifiers in data
+LINE1 = 'first_off'
+LINE2 = 'second_off'
+VALID_LINES = {LINE1, LINE2}
 
 COLUMN_ALIASES = {
     'home_team': ['home_team', 'home', 'team_home', 'h_team'],
     'away_team': ['away_team', 'away', 'team_away', 'a_team', 'visitor', 'visiting_team'],
     'home_xg': ['home_xg', 'home_xG', 'xg_home', 'h_xg'],
     'away_xg': ['away_xg', 'away_xG', 'xg_away', 'a_xg', 'visitor_xg'],
+    'home_off_line': ['home_off_line'],
+    'away_off_line': ['away_off_line'],
+    'toi': ['toi', 'time_on_ice'],
 }
 
 
@@ -46,13 +54,28 @@ def get_value(game, field, default=None):
     return default
 
 
+def _parse_line(val) -> Optional[str]:
+    """Map off_line value to LINE1 or LINE2, else None."""
+    if pd.isna(val):
+        return None
+    v = str(val).strip().lower()
+    if v in ('first_off', 'first'):
+        return LINE1
+    if v in ('second_off', 'second'):
+        return LINE2
+    return None
+
+
 def rmse_score(y_true, y_pred):
     """Root mean squared error."""
     return float(np.sqrt(mean_squared_error(y_true, y_pred)))
 
 
 class BaselineEloOffDefModel:
-    """Offensive/Defensive Elo model. Updates driven by observed vs expected xG."""
+    """
+    Offensive/Defensive Elo model with line 1 and line 2 per team.
+    Updates driven by observed vs expected xG. Uses xG-based wins (expected), not goals.
+    """
 
     def __init__(self, params=None):
         self.params = params or {}
@@ -62,31 +85,54 @@ class BaselineEloOffDefModel:
         self.goal_diff_half_range = float(self.params.get('goal_diff_half_range', 6.0))
         self.time_factor = float(self.params.get('time_factor', 1.0))
         self.league_avg_xg: Optional[float] = self.params.get('league_avg_xg')
-        self.O: Dict[str, float] = {}
-        self.D: Dict[str, float] = {}
+        # Per team, per line: O[team][line] and D[team][line]
+        self.O: Dict[str, Dict[str, float]] = {}
+        self.D: Dict[str, Dict[str, float]] = {}
 
-    def _add_team(self, team: str) -> None:
+    def _add_team_line(self, team: str, line: str) -> None:
         if team not in self.O:
-            self.O[team] = float(self.base_elo)
-            self.D[team] = float(self.base_elo)
+            self.O[team] = {LINE1: float(self.base_elo), LINE2: float(self.base_elo)}
+            self.D[team] = {LINE1: float(self.base_elo), LINE2: float(self.base_elo)}
+        if line not in self.O[team]:
+            self.O[team][line] = float(self.base_elo)
+            self.D[team][line] = float(self.base_elo)
 
-    def _get_team_column(self, df: pd.DataFrame, field: str) -> Optional[str]:
+    def _get_col(self, df: pd.DataFrame, field: str) -> Optional[str]:
         aliases = COLUMN_ALIASES.get(field, [field])
         for alias in aliases:
             if alias in df.columns:
                 return alias
         return None
 
-    def fit(self, games_df: pd.DataFrame) -> None:
-        """Train on game-level DataFrame with home_xg, away_xg."""
-        home_col = self._get_team_column(games_df, 'home_team') or 'home_team'
-        away_col = self._get_team_column(games_df, 'away_team') or 'away_team'
-        hxg_col = self._get_team_column(games_df, 'home_xg') or 'home_xg'
-        axg_col = self._get_team_column(games_df, 'away_xg') or 'away_xg'
+    def fit(self, df: pd.DataFrame) -> None:
+        """
+        Train on shift-level or game-level DataFrame.
 
+        Shift-level (preferred): must have home_team, away_team, home_xg, away_xg,
+        home_off_line, away_off_line, toi. Uses only first_off and second_off shifts.
+
+        Game-level fallback: home_team, away_team, home_xg, away_xg.
+        Treats entire game as line 1 (no line 2 data).
+        """
+        home_col = self._get_col(df, 'home_team') or 'home_team'
+        away_col = self._get_col(df, 'away_team') or 'away_team'
+        hxg_col = self._get_col(df, 'home_xg') or 'home_xg'
+        axg_col = self._get_col(df, 'away_xg') or 'away_xg'
+        hline_col = self._get_col(df, 'home_off_line')
+        aline_col = self._get_col(df, 'away_off_line')
+        toi_col = self._get_col(df, 'toi')
+
+        has_lines = hline_col and aline_col and toi_col
+        if has_lines:
+            self._fit_shifts(df, home_col, away_col, hxg_col, axg_col, hline_col, aline_col, toi_col)
+        else:
+            self._fit_games(df, home_col, away_col, hxg_col, axg_col)
+
+    def _fit_games(self, games_df: pd.DataFrame, home_col: str, away_col: str, hxg_col: str, axg_col: str) -> None:
+        """Game-level fallback: treat each game as line 1."""
         if self.league_avg_xg is None:
-            league_xg_per_team = (games_df[hxg_col].fillna(0) + games_df[axg_col].fillna(0)).sum() / (2 * max(1, len(games_df)))
-            self.league_avg_xg = float(league_xg_per_team)
+            total_xg = games_df[hxg_col].fillna(0).sum() + games_df[axg_col].fillna(0).sum()
+            self.league_avg_xg = float(total_xg / (2 * max(1, len(games_df))))
 
         for _, row in games_df.iterrows():
             ht = str(row[home_col]) if not pd.isna(row[home_col]) else 'Unknown_Home'
@@ -96,47 +142,109 @@ class BaselineEloOffDefModel:
             obs_home = 0 if pd.isna(row[hxg_col]) else float(row[hxg_col])
             obs_away = 0 if pd.isna(row[axg_col]) else float(row[axg_col])
 
-            self._add_team(ht)
-            self._add_team(at)
+            self._add_team_line(ht, LINE1)
+            self._add_team_line(at, LINE1)
 
-            O_home = self.O[ht]
-            D_home = self.D[ht]
-            O_away = self.O[at]
-            D_away = self.D[at]
+            O_h = self.O[ht][LINE1]
+            D_h = self.D[ht][LINE1]
+            O_a = self.O[at][LINE1]
+            D_a = self.D[at][LINE1]
 
-            multi_home = 10.0 ** ((O_home - D_away) / self.elo_scale)
-            multi_away = 10.0 ** ((O_away - D_home) / self.elo_scale)
-            exp_home = self.league_avg_xg * multi_home * self.time_factor
-            exp_away = self.league_avg_xg * multi_away * self.time_factor
+            multi_h = 10.0 ** ((O_h - D_a) / self.elo_scale)
+            multi_a = 10.0 ** ((O_a - D_h) / self.elo_scale)
+            exp_h = self.league_avg_xg * multi_h * self.time_factor
+            exp_a = self.league_avg_xg * multi_a * self.time_factor
 
-            delta_home = self.k * (obs_home - exp_home) / LN10
-            delta_away = self.k * (obs_away - exp_away) / LN10
+            delta_h = self.k * (obs_home - exp_h) / LN10
+            delta_a = self.k * (obs_away - exp_a) / LN10
 
-            self.O[ht] += delta_home
-            self.D[at] -= delta_home
-            self.O[at] += delta_away
-            self.D[ht] -= delta_away
+            self.O[ht][LINE1] += delta_h
+            self.D[at][LINE1] -= delta_h
+            self.O[at][LINE1] += delta_a
+            self.D[ht][LINE1] -= delta_a
+
+    def _fit_shifts(
+        self, shifts_df: pd.DataFrame,
+        home_col: str, away_col: str, hxg_col: str, axg_col: str,
+        hline_col: str, aline_col: str, toi_col: str,
+    ) -> None:
+        """Shift-level: update O/D per line using first_off and second_off shifts only."""
+        shifts = shifts_df[
+            shifts_df[hline_col].isin(VALID_LINES) & shifts_df[aline_col].isin(VALID_LINES)
+        ].copy()
+        if len(shifts) == 0:
+            gb = shifts_df.groupby(['game_id', home_col, away_col]).agg({hxg_col: 'sum', axg_col: 'sum'}).reset_index()
+            self._fit_games(gb, home_col, away_col, hxg_col, axg_col)
+            return
+
+        total_xg = shifts[hxg_col].fillna(0).sum() + shifts[axg_col].fillna(0).sum()
+        total_toi = shifts[toi_col].fillna(0).sum()
+        if total_toi <= 0:
+            total_toi = len(shifts)
+        self.league_avg_xg = float(total_xg / max(total_toi / 3600.0, 0.01))
+
+        for _, row in shifts.iterrows():
+            ht = str(row[home_col]) if not pd.isna(row[home_col]) else 'Unknown_Home'
+            at = str(row[away_col]) if not pd.isna(row[away_col]) else 'Unknown_Away'
+            if ht == at:
+                continue
+
+            hl = _parse_line(row[hline_col]) or LINE1
+            al = _parse_line(row[aline_col]) or LINE1
+            toi = 1.0 if pd.isna(row[toi_col]) else float(row[toi_col])
+            time_frac = max(toi / 3600.0, 0.001)
+
+            obs_home = 0 if pd.isna(row[hxg_col]) else float(row[hxg_col])
+            obs_away = 0 if pd.isna(row[axg_col]) else float(row[axg_col])
+
+            self._add_team_line(ht, hl)
+            self._add_team_line(at, al)
+
+            O_h = self.O[ht][hl]
+            D_a = self.D[at][al]
+            O_a = self.O[at][al]
+            D_h = self.D[ht][hl]
+
+            multi_h = 10.0 ** ((O_h - D_a) / self.elo_scale)
+            multi_a = 10.0 ** ((O_a - D_h) / self.elo_scale)
+            exp_h = self.league_avg_xg * multi_h * time_frac
+            exp_a = self.league_avg_xg * multi_a * time_frac
+
+            delta_h = self.k * (obs_home - exp_h) / LN10
+            delta_a = self.k * (obs_away - exp_a) / LN10
+
+            self.O[ht][hl] += delta_h
+            self.D[at][al] -= delta_h
+            self.O[at][al] += delta_a
+            self.D[ht][hl] -= delta_a
+
+    def _team_net(self, team: str) -> float:
+        """Net strength = average of (O - D) over lines."""
+        if team not in self.O:
+            return 0.0
+        vals = [self.O[team].get(l, self.base_elo) - self.D[team].get(l, self.base_elo) for l in VALID_LINES]
+        return sum(vals) / len(vals) if vals else 0.0
 
     def predict_goals(self, game) -> Tuple[float, float]:
-        """Return (expected_home_xg, expected_away_xg)."""
+        """Return (expected_home_xg, expected_away_xg) using average line ratings."""
         home_team = get_value(game, 'home_team') or 'Unknown_Home'
         away_team = get_value(game, 'away_team') or 'Unknown_Away'
-        self._add_team(home_team)
-        self._add_team(away_team)
-        O_home = self.O.get(home_team, self.base_elo)
-        D_home = self.D.get(home_team, self.base_elo)
-        O_away = self.O.get(away_team, self.base_elo)
-        D_away = self.D.get(away_team, self.base_elo)
+        self._add_team_line(home_team, LINE1)
+        self._add_team_line(away_team, LINE1)
+        O_h = np.mean([self.O.get(home_team, {}).get(l, self.base_elo) for l in VALID_LINES])
+        D_h = np.mean([self.D.get(home_team, {}).get(l, self.base_elo) for l in VALID_LINES])
+        O_a = np.mean([self.O.get(away_team, {}).get(l, self.base_elo) for l in VALID_LINES])
+        D_a = np.mean([self.D.get(away_team, {}).get(l, self.base_elo) for l in VALID_LINES])
 
-        multi_home = 10.0 ** ((O_home - D_away) / self.elo_scale)
-        multi_away = 10.0 ** ((O_away - D_home) / self.elo_scale)
+        multi_h = 10.0 ** ((O_h - D_a) / self.elo_scale)
+        multi_a = 10.0 ** ((O_a - D_h) / self.elo_scale)
         league = self.league_avg_xg or 3.0
-        home_xg = max(0.0, league * multi_home * self.time_factor)
-        away_xg = max(0.0, league * multi_away * self.time_factor)
+        home_xg = max(0.0, league * multi_h * self.time_factor)
+        away_xg = max(0.0, league * multi_a * self.time_factor)
         return home_xg, away_xg
 
     def predict_winner(self, game) -> Tuple[str, float]:
-        """Return (winning_team, confidence). Confidence from xG-share win prob."""
+        """Return (winning_team, confidence). Based on expected xG share."""
         home_team = get_value(game, 'home_team')
         away_team = get_value(game, 'away_team')
         h_xg, a_xg = self.predict_goals(game)
@@ -150,7 +258,7 @@ class BaselineEloOffDefModel:
         return away_team, 1.0 - home_win_prob
 
     def evaluate(self, games_df: pd.DataFrame) -> Dict[str, float]:
-        """Compute RMSE, MAE, R², win_accuracy on xG."""
+        """Compute RMSE, MAE, R², win_accuracy. Win accuracy uses xG (expected win), not goals."""
         home_preds, away_preds = [], []
         home_actuals, away_actuals = [], []
         correct_wins = 0
@@ -194,8 +302,9 @@ class BaselineEloOffDefModel:
         }
 
     def get_rankings(self, top_n: Optional[int] = None) -> List[Tuple[str, float]]:
-        """Sorted list of (team, net_strength). net_strength = O - D (higher = stronger)."""
-        ratings = {t: self.O.get(t, self.base_elo) - self.D.get(t, self.base_elo) for t in set(self.O) | set(self.D)}
+        """Sorted list of (team, net_strength). net_strength = avg(O - D) over lines."""
+        teams = set(self.O.keys()) | set(self.D.keys())
+        ratings = {t: self._team_net(t) for t in teams}
         sorted_ratings = sorted(ratings.items(), key=lambda x: x[1], reverse=True)
         if top_n:
             return sorted_ratings[:top_n]
@@ -203,7 +312,7 @@ class BaselineEloOffDefModel:
 
     @staticmethod
     def compute_brier_logloss(model: 'BaselineEloOffDefModel', test_df: pd.DataFrame, eps: float = 1e-10) -> Tuple[float, float]:
-        """Compute Brier and Log loss for win probability predictions (xG outcome)."""
+        """Brier and Log loss for win probability. Outcome = xG win (expected), not goals."""
         brier_sum, logloss_sum = 0.0, 0.0
         for _, game in test_df.iterrows():
             home_team = get_value(game, 'home_team')
