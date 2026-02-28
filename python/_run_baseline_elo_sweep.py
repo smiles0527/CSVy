@@ -69,11 +69,16 @@ def _expand_param(val, default_list):
 
 config = _config_pre
 
+_run_2_0_only = '--2.0-only' in sys.argv
+
 data_cfg = config.get('data', {})
 val_cfg = config.get('validation', {})
 _raw_iter = config.get('iterations', {})
 iterations_cfg = {str(k): v for k, v in _raw_iter.items()}
-if config.get('quick_test'):
+if _run_2_0_only:
+    _step = 1.0 if '--step1' in sys.argv else 0.1
+    iterations_cfg = {'2.0': {'min': 0.1, 'max': 100, 'step': _step}}
+elif config.get('quick_test'):
     iterations_cfg = {'1.0': {'min': 5, 'max': 20, 'step': 5}, '1.1': {'min': 5, 'max': 20, 'step': 5}, '2.0': {'min': 5, 'max': 30, 'step': 5}}
 hp = config.get('hyperparameters', {})
 out_cfg = config.get('output', {})
@@ -168,7 +173,11 @@ train_raw = raw[raw['game_id'].isin(train_df['game_id'])] if raw_has_lines else 
 test_raw = raw[raw['game_id'].isin(test_df['game_id'])] if raw_has_lines else None
 
 _step_idx = 0
-for model_iteration, cfg in ITERATION_CONFIG.items():
+_iterations_to_run = ['2.0'] if _run_2_0_only else list(ITERATION_CONFIG.keys())
+for model_iteration in _iterations_to_run:
+    if model_iteration not in ITERATION_CONFIG:
+        continue
+    cfg = ITERATION_CONFIG[model_iteration]
     k_range = _expand_param(iterations_cfg.get(model_iteration), [5, 10, 15, 20])
     model_class = cfg['model_class']
     print(f'[Sweep] Iteration {model_iteration}: {len(k_range)} k-values')
@@ -213,14 +222,42 @@ comp_csv = pathlib.Path(out_cfg.get('comparison_csv', str(sweep_dir / 'compariso
 k_csv = pathlib.Path(out_cfg.get('k_metrics_csv', str(sweep_dir / 'k_metrics.csv')))
 results_df.to_csv(comp_csv, index=False)
 k_metrics_df.to_csv(k_csv, index=False)
-print(f'[OK] {comp_csv}')
+print(f'[OK] {comp_csv} ({len(results_df)} rows)')
 print(f'[OK] {k_csv}')
+if _run_2_0_only:
+    k20_csv = sweep_dir / 'k_metrics_2_0.csv'
+    k_metrics_df.to_csv(k20_csv, index=False)
+    print(f'[OK] {k20_csv}')
 
 # Best params per iteration and overall
 best_overall = results_df.iloc[0]
 best_iteration = best_overall['model_iteration']
 best_k = best_overall['k']
 print(f'\nBest overall: iteration {best_iteration}, k={best_k}')
+
+# Write website HTML for 2.0 k-sweep (when --2.0-only)
+if _run_2_0_only:
+    docs_dir = _python_dir.parent / 'docs' if (_python_dir.parent / 'docs').is_dir() else _python_dir / 'docs'
+    if docs_dir.is_dir():
+        rows_html = []
+        for _, r in k_metrics_df.iterrows():
+            rows_html.append(f"<tr><td>{r['k']}</td><td>{r['accuracy']:.4f}</td><td>{r['brier_loss']:.4f}</td><td>{r['log_loss']:.4f}</td><td>{r['combined_rmse']:.4f}</td></tr>")
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>2.0 k-sweep</title>
+<style>body{{font-family:system-ui,sans-serif;margin:1rem;max-width:900px}} table{{border-collapse:collapse;font-size:0.9em}} th,td{{border:1px solid #ddd;padding:4px 8px;text-align:right}} th{{background:#f5f5f5}} .nav{{margin-bottom:1rem}} .scroll{{max-height:70vh;overflow-y:auto}}</style></head>
+<body>
+<nav class="nav"><a href="index.html">← Dashboards</a> | <a href="model_values.html">Model values</a></nav>
+<h1>2.0 Off/Def k-sweep</h1>
+<p>{len(k_metrics_df)} k values. Best: k={best_k}.</p>
+<div class="scroll"><table>
+<tr><th>k</th><th>accuracy</th><th>brier_loss</th><th>log_loss</th><th>combined_rmse</th></tr>
+{''.join(rows_html)}
+</table></div>
+</body></html>"""
+        web_path = docs_dir / 'k_sweep_2_0.html'
+        web_path.write_text(html, encoding='utf-8')
+        print(f'[OK] {web_path}')
 
 # K vs metrics plots with line of best fit
 metrics_to_plot = ['accuracy', 'brier_loss', 'log_loss', 'combined_rmse']
@@ -441,7 +478,7 @@ print(f'[OK] {r1_csv}')
 # Per-iteration team rankings (so dashboard shows correct data for 1.0/1.1/2.0)
 team_rankings_by_iteration = {}
 model_2 = None
-for it in ['1.0', '1.1', '2.0']:
+for it in best_per_iter['model_iteration'].tolist():
     row = best_per_iter[best_per_iter['model_iteration'] == it].iloc[0]
     params = {'k_factor': row['k'], **formula_constants}
     m = ITERATION_CONFIG[it]['model_class'](params)
@@ -450,11 +487,15 @@ for it in ['1.0', '1.1', '2.0']:
     if it == '2.0':
         model_2 = m
 
-# Rating histograms: one per iteration (1.0, 1.1, 2.0)
-fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True)
+# Rating histograms: one per iteration
+_hist_iters = best_per_iter['model_iteration'].tolist()
+n_hist = max(1, len(_hist_iters))
+fig, axes = plt.subplots(1, n_hist, figsize=(4 * n_hist, 4), sharey=True)
+if n_hist == 1:
+    axes = [axes]
 labels = {'1.0': 'Goals', '1.1': 'xG', '2.0': 'Off/Def'}
 colors = {'1.0': '#1f77b4', '1.1': '#ff7f0e', '2.0': '#2ca02c'}
-for idx, it in enumerate(['1.0', '1.1', '2.0']):
+for idx, it in enumerate(_hist_iters):
     ratings = list(team_rankings_by_iteration[it].values())
     axes[idx].hist(ratings, bins=15, edgecolor='black', alpha=0.7, color=colors[it])
     axes[idx].set_xlabel('Rating')
@@ -471,7 +512,7 @@ print(f'[OK] {plots_dir / "rating_histograms.png"}')
 # Pipeline summary (include full O/D per line for 2.0)
 summary = {
     'model': 'BaselineEloSweep',
-    'iterations': ['1.0', '1.1', '2.0'],
+    'iterations': best_per_iter['model_iteration'].tolist(),
     'best_iteration': best_iteration,
     'best_k': float(best_k),
     'train_ratio': train_ratio,
