@@ -4,6 +4,8 @@ Quick reference: which files belong to which model.
 
 All model code lives in `utils/`. Notebooks import from there.
 
+**See also:** [MODEL_VALUES_INDEX.md](MODEL_VALUES_INDEX.md) — explains which value does what (params, constants, formulas).
+
 ---
 
 ## Model 1: Baseline (9 models)

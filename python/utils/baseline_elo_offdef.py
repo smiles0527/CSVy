@@ -316,7 +316,9 @@ class BaselineEloOffDefModel:
         return out
 
     def get_rankings(self, top_n: Optional[int] = None) -> List[Tuple[str, float]]:
-        """Sorted list of (team, net_strength). net_strength = avg(O - D) over lines."""
+        """Sorted list of (team, net_strength). net_strength = avg(O - D) over lines.
+        Values can be negative (O and D start at base_elo; league-wide D often > O).
+        Higher net = stronger. Used for ranking only; P uses Elo formula on diff."""
         teams = set(self.O.keys()) | set(self.D.keys())
         ratings = {t: self._team_net(t) for t in teams}
         sorted_ratings = sorted(ratings.items(), key=lambda x: x[1], reverse=True)

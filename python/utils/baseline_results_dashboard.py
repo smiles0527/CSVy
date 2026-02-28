@@ -639,18 +639,31 @@ class BaselineResultsDashboard:
         if tr:
             ranked = sorted(tr.items(), key=lambda x: -x[1])
             n = len(ranked)
-            tbl = "<table><tr><th>Rank</th><th>Team</th><th>Rating</th></tr>"
+            ratings = [r for _, r in ranked]
+            mean_r = sum(ratings) / n if n else 0
+            bp = (self.goals_summary or {}).get("best_params") or {}
+            elo_scale = float(bp.get("elo_scale", 400))
+            tbl = "<table><tr><th>Rank</th><th>Team</th><th>P</th></tr>"
             for i, (t, r) in enumerate(ranked, 1):
-                tbl += f"<tr><td>{i}</td><td>{t}</td><td>{r:.1f}</td></tr>"
+                diff = r - mean_r
+                p_val = 1.0 / (1.0 + 10.0 ** (-diff / elo_scale))
+                tbl += f"<tr><td>{i}</td><td>{t}</td><td>{p_val:.3f}</td></tr>"
             tbl += "</table>"
-            parts.append(f'<div><h3>{lab} ({n} teams)</h3>{self._wrap_table(tbl)}</div>')
+            note = ' <span style="color:#666;font-size:0.85em">(Net = O−D; negative is normal, higher = stronger)</span>' if iteration == "2.0" else ""
+            parts.append(f'<div><h3>{lab} ({n} teams){note}</h3>{self._wrap_table(tbl)}</div>')
         if self.xg_summary and "team_rankings" in self.xg_summary and not iteration:
             tr = self.xg_summary["team_rankings"]
             ranked = sorted(tr.items(), key=lambda x: -x[1])
             n = len(ranked)
-            tbl = "<table><tr><th>Rank</th><th>Team</th><th>Rating</th></tr>"
+            ratings = [r for _, r in ranked]
+            mean_r = sum(ratings) / n if n else 0
+            bp = (self.xg_summary or {}).get("best_params") or {}
+            elo_scale = float(bp.get("elo_scale", 400))
+            tbl = "<table><tr><th>Rank</th><th>Team</th><th>P</th></tr>"
             for i, (t, r) in enumerate(ranked, 1):
-                tbl += f"<tr><td>{i}</td><td>{t}</td><td>{r:.1f}</td></tr>"
+                diff = r - mean_r
+                p_val = 1.0 / (1.0 + 10.0 ** (-diff / elo_scale))
+                tbl += f"<tr><td>{i}</td><td>{t}</td><td>{p_val:.3f}</td></tr>"
             tbl += "</table>"
             parts.append(f'<div><h3>xG ({n} teams)</h3>{self._wrap_table(tbl)}</div>')
         parts.append("</div>")
