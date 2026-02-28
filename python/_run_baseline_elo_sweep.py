@@ -409,7 +409,8 @@ for _, g in games_df.iterrows():
 standings_rank = {t: r for r, (t, _) in enumerate(sorted(standings.items(), key=lambda x: -x[1]), 1)}
 
 corr_rows = []
-for it in ['1.0', '1.1', '2.0']:
+iters_for_corr = results_df['model_iteration'].unique().tolist()
+for it in iters_for_corr:
     best_row = results_df[results_df['model_iteration'] == it].iloc[0]
     params = {'k_factor': best_row['k'], **formula_constants}
     m = ITERATION_CONFIG[it]['model_class'](params)

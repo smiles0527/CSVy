@@ -1,2 +1,2 @@
 model_iteration,win_accuracy,brier_loss,log_loss,beats_constant_50_acc,beats_brier,beats_log
-2.0,0.648854961832061,0.2444582443396298,0.6820520947934875,True,True,True
+2.0,0.6641221374045801,0.23321794231484483,0.6592533310924438,True,True,True

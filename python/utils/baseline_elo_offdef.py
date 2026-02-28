@@ -168,7 +168,9 @@ class BaselineEloOffDefModel:
         home_col: str, away_col: str, hxg_col: str, axg_col: str,
         hline_col: str, aline_col: str, toi_col: str,
     ) -> None:
-        """Shift-level: update O/D per line using first_off and second_off shifts only."""
+        """Shift-level: update O/D per line using first_off and second_off shifts only.
+        Uses toi_delta (change in TOI) per segment: toi_at_this_row - toi_at_previous_row.
+        Assumes cumulative toi within each game; first row per game uses toi as delta."""
         shifts = shifts_df[
             shifts_df[hline_col].isin(VALID_LINES) & shifts_df[aline_col].isin(VALID_LINES)
         ].copy()
@@ -177,8 +179,22 @@ class BaselineEloOffDefModel:
             self._fit_games(gb, home_col, away_col, hxg_col, axg_col)
             return
 
+        # Sort by game and time order; use record_id if available
+        game_col = 'game_id' if 'game_id' in shifts.columns else home_col
+        sort_cols = [game_col]
+        if 'record_id' in shifts.columns:
+            sort_cols.append('record_id')
+        shifts = shifts.sort_values(sort_cols).reset_index(drop=True)
+
+        # Compute toi_delta = toi - toi_prev within each game
+        shifts['_toi_raw'] = shifts[toi_col].fillna(0).astype(float)
+        shifts['_toi_prev'] = shifts.groupby(game_col)['_toi_raw'].shift(1).fillna(0)
+        shifts['_toi_delta'] = (shifts['_toi_raw'] - shifts['_toi_prev']).clip(lower=0)
+
         total_xg = shifts[hxg_col].fillna(0).sum() + shifts[axg_col].fillna(0).sum()
-        total_toi = shifts[toi_col].fillna(0).sum()
+        total_toi = shifts['_toi_delta'].sum()
+        if total_toi <= 0:
+            total_toi = shifts['_toi_raw'].sum()
         if total_toi <= 0:
             total_toi = len(shifts)
         self.league_avg_xg = float(total_xg / max(total_toi / 3600.0, 0.01))
@@ -191,8 +207,10 @@ class BaselineEloOffDefModel:
 
             hl = _parse_line(row[hline_col]) or LINE1
             al = _parse_line(row[aline_col]) or LINE1
-            toi = 1.0 if pd.isna(row[toi_col]) else float(row[toi_col])
-            time_frac = max(toi / 3600.0, 0.001)
+            toi_delta = float(row['_toi_delta'])
+            if toi_delta <= 0:
+                toi_delta = float(row['_toi_raw']) if row['_toi_raw'] > 0 else 1.0
+            time_frac = max(toi_delta / 3600.0, 0.001)
 
             obs_home = 0 if pd.isna(row[hxg_col]) else float(row[hxg_col])
             obs_away = 0 if pd.isna(row[axg_col]) else float(row[axg_col])
