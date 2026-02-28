@@ -734,14 +734,37 @@ class BaselineResultsDashboard:
         df = df.sort_values("_sort").reset_index(drop=True)
         df = df.drop(columns=["_sort"], errors="ignore")
 
+        # Elo probability: P = 1/(1+10^(-diff/scale)), diff = rating - mean
+        bp = (self.goals_summary or {}).get("best_params") or (self.xg_summary or {}).get("best_params") or {}
+        elo_scale = float(bp.get("elo_scale", 400))
+
+        def _rating_to_prob(rating: Optional[float], mean_rating: float) -> Optional[float]:
+            if rating is None or mean_rating is None or (isinstance(mean_rating, float) and pd.isna(mean_rating)):
+                return None
+            if isinstance(rating, float) and pd.isna(rating):
+                return None
+            diff = float(rating) - float(mean_rating)
+            return 1.0 / (1.0 + 10.0 ** (-diff / elo_scale))
+
         if has_both:
+            mean_g = pd.to_numeric(df["Rating_G"], errors="coerce").mean()
+            mean_x = pd.to_numeric(df["Rating_xG"], errors="coerce").mean()
+            df["P_G"] = df["Rating_G"].apply(lambda r: _rating_to_prob(r, mean_g))
+            df["P_xG"] = df["Rating_xG"].apply(lambda r: _rating_to_prob(r, mean_x))
             df["Rank_G"] = df["Rank_G"].apply(lambda x: "—" if x == 999 else int(x))
             df["Rating_G"] = df["Rating_G"].apply(lambda x: "—" if x is None else f"{x:.1f}")
+            df["P_G"] = df["P_G"].apply(lambda x: "—" if (x is None or (isinstance(x, float) and pd.isna(x))) else f"{x:.3f}")
             df["Rank_xG"] = df["Rank_xG"].apply(lambda x: "—" if x == 999 else int(x))
             df["Rating_xG"] = df["Rating_xG"].apply(lambda x: "—" if x is None else f"{x:.1f}")
+            df["P_xG"] = df["P_xG"].apply(lambda x: "—" if x is None else f"{x:.3f}")
+            df = df[["Team", "Rank_G", "Rating_G", "P_G", "Rank_xG", "Rating_xG", "P_xG"]]
         else:
+            mean_r = pd.to_numeric(df["Rating"], errors="coerce").mean()
+            df["P"] = df["Rating"].apply(lambda r: _rating_to_prob(r, mean_r))
             df["Rank"] = df["Rank"].apply(lambda x: "—" if x == 999 else int(x))
             df["Rating"] = df["Rating"].apply(lambda x: "—" if x is None else f"{x:.1f}")
+            df["P"] = df["P"].apply(lambda x: "—" if (x is None or (isinstance(x, float) and pd.isna(x))) else f"{x:.3f}")
+            df = df[["Team", "Rank", "Rating", "P"]]
         n = len(rows)
         return f'<h3>All teams in Round 1 ({n})</h3>{self._wrap_table(df.to_html(index=False))}'
 

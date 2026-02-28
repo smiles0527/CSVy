@@ -244,15 +244,18 @@ class BaselineEloOffDefModel:
         return home_xg, away_xg
 
     def predict_winner(self, game) -> Tuple[str, float]:
-        """Return (winning_team, confidence). Based on expected xG share."""
-        home_team = get_value(game, 'home_team')
-        away_team = get_value(game, 'away_team')
-        h_xg, a_xg = self.predict_goals(game)
-        total = h_xg + a_xg
-        if total <= 0:
-            home_win_prob = 0.5
-        else:
-            home_win_prob = h_xg / total
+        """Return (winning_team, confidence). Uses rating-diff in Elo probability: P = 1/(1+10^(-diff/400))."""
+        home_team = get_value(game, 'home_team') or 'Unknown_Home'
+        away_team = get_value(game, 'away_team') or 'Unknown_Away'
+        self._add_team_line(home_team, LINE1)
+        self._add_team_line(away_team, LINE1)
+        O_h = np.mean([self.O.get(home_team, {}).get(l, self.base_elo) for l in VALID_LINES])
+        D_h = np.mean([self.D.get(home_team, {}).get(l, self.base_elo) for l in VALID_LINES])
+        O_a = np.mean([self.O.get(away_team, {}).get(l, self.base_elo) for l in VALID_LINES])
+        D_a = np.mean([self.D.get(away_team, {}).get(l, self.base_elo) for l in VALID_LINES])
+        # Rating diff: home attacking vs away defending minus away attacking vs home defending
+        diff = (O_h - D_a) - (O_a - D_h)
+        home_win_prob = 1.0 / (1.0 + 10.0 ** (-diff / self.elo_scale))
         if home_win_prob > 0.5:
             return home_team, home_win_prob
         return away_team, 1.0 - home_win_prob
