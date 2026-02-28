@@ -17,6 +17,8 @@
       flex-wrap: wrap;
     }
     .header label { font-weight: 500; }
+    .header a { color: #06c; text-decoration: none; font-size: 0.9em; margin-left: auto; }
+    .header a:hover { text-decoration: underline; }
     .header select {
       padding: 0.4rem 0.75rem;
       font-size: 0.95rem;
@@ -47,6 +49,7 @@
       <option value="dashboards/baseline_elo_2_0.html">2.0 Off/Def</option>
       <option value="dashboards/baseline_elo_xg.html">Baseline Elo xG</option>
     </select>
+    <a href="model_values.html">Model values</a>
   </header>
   <div class="iframe-wrap">
     <iframe id="frame" src="dashboards/baseline.html" title="Dashboard"></iframe>

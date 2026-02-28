@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Model Values</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; padding: 1rem 1.5rem; max-width: 800px; }
+    a { color: #06c; }
+    h1 { font-size: 1.25rem; margin-bottom: 1rem; }
+    h2 { font-size: 1rem; margin: 1.25rem 0 0.5rem; font-weight: 600; }
+    dl { margin: 0; }
+    dt { font-family: ui-monospace, monospace; font-size: 0.9em; margin-top: 0.4rem; }
+    dd { margin: 0.1rem 0 0 1rem; font-size: 0.9em; color: #444; }
+    .nav { margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <nav class="nav"><a href="index.html">← Dashboards</a></nav>
+  <h1>Model Values</h1>
+
+  <h2>Baseline Elo (1.0, 1.1, 2.0)</h2>
+  <dl>
+    <dt>k_factor</dt><dd>Rating change per game. Tuned 5–30.</dd>
+    <dt>initial_rating</dt><dd>Starting Elo (1200).</dd>
+    <dt>elo_scale</dt><dd>Win prob denominator. 400 = standard.</dd>
+    <dt>league_avg_goals</dt><dd>Used to convert win prob → goals.</dd>
+    <dt>goal_diff_half_range</dt><dd>Max goals swing from win prob (6).</dd>
+    <dt>league_avg_xg</dt><dd>2.0 only. xG/hour from data.</dd>
+    <dt>time_factor</dt><dd>2.0 only. Game length multiplier.</dd>
+    <dt>O</dt><dd>2.0 only. Offense rating per line.</dd>
+    <dt>D</dt><dd>2.0 only. Defense rating per line.</dd>
+    <dt>Net (O−D)</dt><dd>Team strength. Can be negative.</dd>
+  </dl>
+
+  <h2>EloModel</h2>
+  <dl>
+    <dt>initial_rating</dt><dd>Base Elo (1500).</dd>
+    <dt>k_factor</dt><dd>Base rating change.</dd>
+    <dt>home_advantage</dt><dd>Elo boost for home.</dd>
+    <dt>mov_multiplier</dt><dd>Blowouts move ratings more.</dd>
+    <dt>mov_method</dt><dd>'linear' or 'logarithmic'.</dd>
+    <dt>ot_win_multiplier</dt><dd>OT win value (0.75).</dd>
+    <dt>rest_advantage_per_day</dt><dd>Boost per rest day.</dd>
+    <dt>b2b_penalty</dt><dd>Back-to-back penalty.</dd>
+  </dl>
+
+  <h2>Enhanced Elo</h2>
+  <dl>
+    <dt>initial_rating</dt><dd>Base (1500).</dd>
+    <dt>k_factor</dt><dd>Base K.</dd>
+    <dt>k_decay</dt><dd>K shrinks per game.</dd>
+    <dt>k_min</dt><dd>Floor for K (8).</dd>
+    <dt>home_advantage</dt><dd>Home boost (100).</dd>
+    <dt>mov_multiplier</dt><dd>MOV weight.</dd>
+    <dt>xg_weight</dt><dd>Blend xG vs goals for MOV.</dd>
+    <dt>rolling_window</dt><dd>Games for rolling avg (15).</dd>
+    <dt>shot_share_weight</dt><dd>Corsi-style adjust.</dd>
+    <dt>penalty_weight</dt><dd>Penalty diff adjust.</dd>
+    <dt>scoring_baseline</dt><dd>'league' or 'team'.</dd>
+    <dt>xg_pred_weight</dt><dd>Blend xG into predictions.</dd>
+    <dt>elo_shift_scale</dt><dd>Elo diff → goal shift (2.0).</dd>
+  </dl>
+
+  <h2>Baseline Models</h2>
+  <dl>
+    <dt>window</dt><dd>MovingAverage: recent games count.</dd>
+    <dt>decay</dt><dd>WeightedHistory: recent games matter more.</dd>
+    <dt>max_iter</dt><dd>DixonColes: EM iterations.</dd>
+    <dt>tol</dt><dd>DixonColes: convergence.</dd>
+    <dt>home_adv</dt><dd>DixonColes: home mult (~1.15).</dd>
+    <dt>prior_weight</dt><dd>BayesianTeam: prior strength.</dd>
+    <dt>models</dt><dd>EnsembleBaseline: sub-models.</dd>
+    <dt>weights</dt><dd>EnsembleBaseline: fixed weights.</dd>
+    <dt>method</dt><dd>EnsembleBaseline: e.g. inverse_rmse.</dd>
+  </dl>
+
+  <h2>Pipeline</h2>
+  <dl>
+    <dt>team_rankings</dt><dd>1.0/1.1: Elo. 2.0: Net O−D.</dd>
+    <dt>confidence</dt><dd>Win prob 0–1.</dd>
+    <dt>P</dt><dd>P(team beats avg).</dd>
+    <dt>train_ratio</dt><dd>70% train, 30% test.</dd>
+  </dl>
+</body>
+</html>
