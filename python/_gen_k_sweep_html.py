@@ -7,7 +7,8 @@ csv_path = Path('output/predictions/baseline_elo/sweep/k_metrics_2_0.csv')
 docs_dir = Path(__file__).resolve().parent.parent / 'docs'
 
 df = pd.read_csv(csv_path)
-best = df.loc[df['combined_rmse'].idxmin()]
+df = df.sort_values('accuracy', ascending=False).reset_index(drop=True)
+best = df.iloc[0]
 best_k = best['k']
 
 rows = []
@@ -21,7 +22,7 @@ html = f"""<!DOCTYPE html>
 <body>
 <nav class="nav"><a href="index.html">← Dashboards</a> | <a href="model_values.html">Model values</a></nav>
 <h1>2.0 Off/Def k-sweep</h1>
-<p>{len(df)} k values. Best: k={best_k}.</p>
+<p>{len(df)} k values (0.1 to 100). Sorted by accuracy (best first). Best: k={best_k}.</p>
 <div class="scroll"><table>
 <tr><th>k</th><th>accuracy</th><th>brier_loss</th><th>log_loss</th><th>combined_rmse</th></tr>
 {''.join(rows)}

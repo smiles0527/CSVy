@@ -76,7 +76,7 @@ val_cfg = config.get('validation', {})
 _raw_iter = config.get('iterations', {})
 iterations_cfg = {str(k): v for k, v in _raw_iter.items()}
 if _run_2_0_only:
-    _step = 1.0 if '--step1' in sys.argv else 0.1
+    _step = 1.0 if '--step1' in sys.argv else 0.1  # 0.1 -> 1000 k values (0.1 to 100)
     iterations_cfg = {'2.0': {'min': 0.1, 'max': 100, 'step': _step}}
 elif config.get('quick_test'):
     iterations_cfg = {'1.0': {'min': 5, 'max': 20, 'step': 5}, '1.1': {'min': 5, 'max': 20, 'step': 5}, '2.0': {'min': 5, 'max': 30, 'step': 5}}
@@ -226,7 +226,8 @@ print(f'[OK] {comp_csv} ({len(results_df)} rows)')
 print(f'[OK] {k_csv}')
 if _run_2_0_only:
     k20_csv = sweep_dir / 'k_metrics_2_0.csv'
-    k_metrics_df.to_csv(k20_csv, index=False)
+    k20_df = k_metrics_df[k_metrics_df['model_iteration'] == '2.0'].sort_values('accuracy', ascending=False).reset_index(drop=True)
+    k20_df.to_csv(k20_csv, index=False)
     print(f'[OK] {k20_csv}')
 
 # Best params per iteration and overall
@@ -240,8 +241,9 @@ if _run_2_0_only:
     docs_dir = _python_dir.parent / 'docs' if (_python_dir.parent / 'docs').is_dir() else _python_dir / 'docs'
     if docs_dir.is_dir():
         rows_html = []
-        for _, r in k_metrics_df.iterrows():
+        for _, r in k20_df.iterrows():
             rows_html.append(f"<tr><td>{r['k']}</td><td>{r['accuracy']:.4f}</td><td>{r['brier_loss']:.4f}</td><td>{r['log_loss']:.4f}</td><td>{r['combined_rmse']:.4f}</td></tr>")
+        best_by_acc = k20_df.iloc[0]
         html = f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>2.0 k-sweep</title>
@@ -249,7 +251,7 @@ if _run_2_0_only:
 <body>
 <nav class="nav"><a href="index.html">← Dashboards</a> | <a href="model_values.html">Model values</a></nav>
 <h1>2.0 Off/Def k-sweep</h1>
-<p>{len(k_metrics_df)} k values. Best: k={best_k}.</p>
+<p>{len(k20_df)} k values (0.1 to 100, step 0.1). Sorted by accuracy (best first). Best accuracy: k={best_by_acc['k']}.</p>
 <div class="scroll"><table>
 <tr><th>k</th><th>accuracy</th><th>brier_loss</th><th>log_loss</th><th>combined_rmse</th></tr>
 {''.join(rows_html)}
