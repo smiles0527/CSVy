@@ -15,7 +15,7 @@ All model code lives in `utils/`. Notebooks import from there.
 | `utils/baseline_model.py` | All 9 baseline classes + compare/save/load |
 | `training/train_baseline.ipynb` | Train all 17 configs, tune, predict Round 1 |
 | `validation/validate_baseline.ipynb` | 9 validation tests |
-| `_run_baselines.py` | Standalone pipeline script |
+| `scripts/run/run_baselines.py` | Standalone pipeline script |
 
 **Classes:** `GlobalMeanBaseline`, `TeamMeanBaseline`, `HomeAwayBaseline`, `MovingAverageBaseline`, `WeightedHistoryBaseline`, `PoissonBaseline`, `DixonColesBaseline`, `BayesianTeamBaseline`, `EnsembleBaseline`
 
@@ -28,7 +28,7 @@ All model code lives in `utils/`. Notebooks import from there.
 | `utils/baseline_elo.py` | BaselineEloModel class (classic Elo, no home/MOV) |
 | `training/baseline_elo/train_baseline_elo.ipynb` | Train + k-grid search + Round 1 predictions |
 | `validation/validate_baseline_elo.ipynb` | Validation tests |
-| `_run_baseline_elo.py` | Standalone pipeline script |
+| `scripts/run/run_baseline_elo.py` | Standalone pipeline script |
 | `config/hyperparams/model_baseline_elo.yaml` | YAML config |
 
 ---

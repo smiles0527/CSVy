@@ -4,21 +4,31 @@ Quick Elo regeneration — uses known best params, trains on all data,
 outputs correctly-formatted Round 1 predictions with game_id column.
 """
 import sys, os, json
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pathlib import Path
+_script = Path(__file__).resolve()
+_python_dir = _script.parent
+while True:
+    if (_python_dir / 'utils').is_dir():
+        break
+    parent = _python_dir.parent
+    if parent == _python_dir:
+        raise RuntimeError('Cannot locate python/')
+    _python_dir = parent
+os.chdir(_python_dir)
+sys.path.insert(0, str(_python_dir))
 
 import pandas as pd
 import numpy as np
-from pathlib import Path
 from utils.hockey_features import aggregate_to_games
 from utils.enhanced_elo_model import EnhancedEloModel
 
-OUTPUT = Path(os.path.dirname(__file__)) / 'output' / 'predictions' / 'elo'
-MODEL_DIR = Path(os.path.dirname(__file__)) / 'output' / 'models'
+OUTPUT = _python_dir / 'output' / 'predictions' / 'elo'
+MODEL_DIR = _python_dir / 'output' / 'models'
 OUTPUT.mkdir(parents=True, exist_ok=True)
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Load data ─────────────────────────────────────────────────────
-raw = pd.read_csv(os.path.join(os.path.dirname(__file__), 'data', 'whl_2025.csv'))
+raw = pd.read_csv(str(_python_dir / 'data' / 'whl_2025.csv'))
 if raw['game_id'].dtype == object:
     raw['game_id'] = raw['game_id'].str.replace('game_', '', regex=False).astype(int)
 
@@ -65,7 +75,7 @@ print()
 
 # ── Round 1 predictions ──────────────────────────────────────────
 print("[3] Generating Round 1 predictions...")
-matchups = pd.read_excel(os.path.join(os.path.dirname(__file__), 'data', 'WHSDSC_Rnd1_matchups.xlsx'))
+matchups = pd.read_excel(str(_python_dir / 'data' / 'WHSDSC_Rnd1_matchups.xlsx'))
 print(f"  Matchups loaded: {len(matchups)} games")
 print()
 

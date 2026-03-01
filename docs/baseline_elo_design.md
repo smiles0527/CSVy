@@ -160,17 +160,19 @@ $$
 ### 4.5 O/D Rating Update
 
 $$
-\delta_{h} = k \cdot \frac{o_{h} - e_{h}}{\ln(10)}
+\delta_{h} = k \cdot \frac{\ln(10)}{s} \cdot (o_{h} - e_{h})
 $$
 
 $$
-\delta_{a} = k \cdot \frac{o_{a} - e_{a}}{\ln(10)}
+\delta_{a} = k \cdot \frac{\ln(10)}{s} \cdot (o_{a} - e_{a})
 $$
 
-where \(o_{h}\) = observed home xG, \(e_{h}\) = expected home xG (and similarly for away).
+where \(o_{h}\) = observed home xG, \(e_{h}\) = expected home xG (and similarly for away), \(s\) = `elo_scale`.
 
 - \(O_{h} \leftarrow O_{h} + \delta_{h}\), \(D_{a} \leftarrow D_{a} - \delta_{h}\) (home offense vs away defense)
 - \(O_{a} \leftarrow O_{a} + \delta_{a}\), \(D_{h} \leftarrow D_{h} - \delta_{a}\) (away offense vs home defense)
+
+*Derivation:* Poisson log-likelihood gradient; see `docs/baseline_elo_offdef_calculations.md`.
 
 ### 4.6 Net Rating & Win Probability
 
@@ -195,7 +197,7 @@ When no shift/line data: one O and D per team (line 1 only). `league_avg_xg` = t
 
 | Param | Default | 1.0 | 1.1 | 2.0 | Role |
 |-------|---------|-----|-----|-----|------|
-| `k_factor` | 32 | ✓ | ✓ | ✓ | Rating change magnitude (swept 0.1–100 for 2.0) |
+| `k_factor` | 32 | ✓ | ✓ | ✓ | Rating change magnitude (swept 0.1–500 for 2.0) |
 | `initial_rating` | 1200 | ✓ | ✓ | ✓ | Starting O, D per team/line |
 | `elo_scale` | 400 | ✓ | ✓ | ✓ | Divisor in win-prob formula |
 | `league_avg_goals` | 3.0 | ✓ | ✓ | — | Baseline for goal/xG prediction (1.0, 1.1) |
@@ -232,7 +234,7 @@ When no shift/line data: one O and D per team (line 1 only). `league_avg_xg` = t
 ## 8. Validation & Evaluation
 
 - **Train/test**: Configurable split (e.g. 70/30 block CV, 3 folds).
-- **K-sweep**: `k_factor` grid (e.g. 0.1–100 step 0.1 for 2.0).
+- **K-sweep**: `k_factor` grid (e.g. 0.1–500 step 0.1 for 2.0).
 - **Selection**: Best by `combined_rmse` or by accuracy.
 - **Metrics**: RMSE, MAE, R², win_accuracy, Brier loss, log loss.
 
@@ -246,7 +248,7 @@ When no shift/line data: one O and D per team (line 1 only). `league_avg_xg` = t
 | 1.1 | `python/utils/baseline_elo_xg.py` | `model_baseline_elo_xg.yaml` |
 | 2.0 | `python/utils/baseline_elo_offdef.py` | `model_baseline_elo_sweep.yaml` |
 
-**Unified sweep**: `python/_run_baseline_elo_sweep.py` — runs 1.0, 1.1, 2.0 or `--2.0-only`.
+**Unified sweep**: `python/scripts/run/run_baseline_elo_sweep.py` — runs 1.0, 1.1, 2.0 or `--2.0-only`.
 
 ---
 

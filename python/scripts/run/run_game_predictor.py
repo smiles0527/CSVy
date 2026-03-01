@@ -18,8 +18,18 @@ if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, '.')
+from pathlib import Path
+_script = Path(__file__).resolve()
+_python_dir = _script.parent
+while True:
+    if (_python_dir / 'utils').is_dir():
+        break
+    parent = _python_dir.parent
+    if parent == _python_dir:
+        raise RuntimeError('Cannot locate python/')
+    _python_dir = parent
+os.chdir(_python_dir)
+sys.path.insert(0, str(_python_dir))
 
 from utils.game_predictor import (
     GamePredictor, aggregate_games, compute_stats,

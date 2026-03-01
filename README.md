@@ -24,7 +24,11 @@ python/
   validation/             # Validation test suites (one per model)
   data/                   # WHL dataset + matchups
   output/                 # Results, predictions, saved models
-  _run_baselines.py       # Standalone baseline pipeline script
+  scripts/                # Pipeline & utility scripts
+    run/                  # run_baselines.py, run_elo, run_baseline_elo_sweep, etc.
+    optimize/             # optimize_model.py, finetune.py
+    analysis/             # competitive_analysis.py, calc_brier_logloss.py
+    tools/                # gen_k_sweep_html.py
 docs/
   DEVELOPMENT_LOG.md      # Progress log with all results
   DATASET_FEATURES.md     # Raw feature reference

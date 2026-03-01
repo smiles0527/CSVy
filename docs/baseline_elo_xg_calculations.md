@@ -194,6 +194,8 @@ where \(E_A, E_B\) are clipped to \([\epsilon, 1-\epsilon]\) (e.g. \(\epsilon = 
 ## 8. Implemented Locations
 
 - **Core model**: `python/utils/baseline_elo_xg.py`
-- **Pipeline**: `python/_run_baseline_elo_xg.py`
+- **Pipeline**: `python/scripts/run/run_baseline_elo_xg.py`
 - **Config**: `config/hyperparams/model_baseline_elo_xg.yaml`
 - **Training**: `python/training/baseline_elo_xg/train_baseline_elo_xg.ipynb`
+
+**Related**: 2.0 (Off/Def) derivation: `docs/baseline_elo_offdef_calculations.md`

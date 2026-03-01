@@ -1,7 +1,7 @@
 """
 Model Optimization Based on Competitive Intel
 ==============================================
-Findings from _competitive_analysis.py:
+Findings from scripts/analysis/competitive_analysis.py:
   - Ridge(6 features) = 1.7268 BEATS our GP+Elo = 1.7364
   - H2H features HURT (removing them improves by 0.0095)
   - Our Elo component (1.7464) drags the blend UP
@@ -27,8 +27,18 @@ warnings.filterwarnings('ignore')
 if sys.platform == 'win32':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, '.')
+from pathlib import Path
+_script = Path(__file__).resolve()
+_python_dir = _script.parent
+while True:
+    if (_python_dir / 'utils').is_dir():
+        break
+    parent = _python_dir.parent
+    if parent == _python_dir:
+        raise RuntimeError('Cannot locate python/')
+    _python_dir = parent
+os.chdir(_python_dir)
+sys.path.insert(0, str(_python_dir))
 
 from utils.game_predictor import (
     aggregate_games, compute_stats, build_features, build_dataset, FEATURE_NAMES,

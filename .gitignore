@@ -40,7 +40,17 @@ data/csvs.db
 # Temporary files
 *_temp.csv
 *_tmp.csv
+*_temp.txt
+*temp.txt
 *.log
+**/stuff.zip
+
+# Generated artifacts (canonical versions in docs/dashboards)
+python/output/predictions/*_dashboard.html
+python/output/predictions/elo/recursive/run_*.csv
+
+# Training run logs
+python/train_*_run.txt
 
 # Used by dotenv library to load environment variables.
 # .env

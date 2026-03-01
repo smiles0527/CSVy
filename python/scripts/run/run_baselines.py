@@ -8,11 +8,21 @@ Baseline Model — Full Pipeline
 4. Generate Round 1 predictions from best model
 """
 import sys, os, json
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pathlib import Path
+_script = Path(__file__).resolve()
+_python_dir = _script.parent
+while True:
+    if (_python_dir / 'utils').is_dir():
+        break
+    parent = _python_dir.parent
+    if parent == _python_dir:
+        raise RuntimeError('Cannot locate python/')
+    _python_dir = parent
+os.chdir(_python_dir)
+sys.path.insert(0, str(_python_dir))
 
 import pandas as pd
 import numpy as np
-from pathlib import Path
 from utils.hockey_features import aggregate_to_games
 from utils.baseline_model import (
     GlobalMeanBaseline, TeamMeanBaseline, HomeAwayBaseline,
@@ -20,13 +30,13 @@ from utils.baseline_model import (
     DixonColesBaseline, BayesianTeamBaseline, EnsembleBaseline,
 )
 
-OUTPUT = Path(os.path.dirname(__file__)) / 'output' / 'predictions'
-MODEL_DIR = Path(os.path.dirname(__file__)) / 'output' / 'models'
+OUTPUT = _python_dir / 'output' / 'predictions'
+MODEL_DIR = _python_dir / 'output' / 'models'
 OUTPUT.mkdir(parents=True, exist_ok=True)
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Load data ─────────────────────────────────────────────────────
-raw = pd.read_csv(os.path.join(os.path.dirname(__file__), 'data', 'whl_2025.csv'))
+raw = pd.read_csv(str(_python_dir / 'data' / 'whl_2025.csv'))
 if raw['game_id'].dtype == object:
     raw['game_id'] = raw['game_id'].str.replace('game_', '', regex=False).astype(int)
 
@@ -184,7 +194,7 @@ best_final_model.fit(games)
 best_final_model.save_model(str(MODEL_DIR / 'best_baseline.pkl'))
 
 # Load matchups
-matchups = pd.read_excel(os.path.join(os.path.dirname(__file__), 'data', 'WHSDSC_Rnd1_matchups.xlsx'))
+matchups = pd.read_excel(str(_python_dir / 'data' / 'WHSDSC_Rnd1_matchups.xlsx'))
 print(f"  Matchups loaded: {len(matchups)} games")
 print()
 
@@ -248,5 +258,5 @@ print(f"  Model:       {MODEL_DIR / 'best_baseline.pkl'}")
 print(f"  Summary:     {OUTPUT / 'baseline_pipeline_summary.json'}")
 print()
 print("  For multi-run robustness + uncertainty (std):")
-print("    python _run_recursive.py --baseline-only --mode expand")
-print("    python _run_recursive.py --baseline-only --mode hyperparam")
+print("    python scripts/run/run_recursive.py --baseline-only --mode expand")
+print("    python scripts/run/run_recursive.py --baseline-only --mode hyperparam")

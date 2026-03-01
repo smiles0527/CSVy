@@ -19,7 +19,7 @@ validation:
   n_runs: 1
 
 # -----------------------------------------------------------------------------
-# OPTIONAL - live plot during sweep: python _run_baseline_elo_xg_sweep.py --live
+# OPTIONAL - live plot during sweep: python scripts/run/run_baseline_elo_xg_sweep.py --live
 # live_dashboard: true  # or pass --live
 # -----------------------------------------------------------------------------
 # K RANGE - 0.1 to 35, step 0.1 (same as win iterations 1.0/1.1)

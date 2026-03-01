@@ -38,7 +38,7 @@ Comprehensive scan of every numeric value, constant, and formula in the baseline
 
 | Value | Location | Purpose |
 |-------|----------|---------|
-| LN10 = np.log(10) ≈ 2.3026 | 26 | Delta scaling: k*(obs-exp)/LN10 |
+| LN10 = np.log(10) ≈ 2.3026 | 26 | Gradient scaling: delta = k*(LN10/elo_scale)*(obs-exp) |
 | 10.0 ** ((O-D)/elo_scale) | 153-154, 207-208, 239-240, 257 | Multiplier for expected xG |
 | 3600.0 | 184, 195 | toi seconds → hours |
 | 0.001 | 195 | min time_frac (avoid div by zero) |
@@ -48,7 +48,7 @@ Comprehensive scan of every numeric value, constant, and formula in the baseline
 
 **Update formulas (shift-level):**
 - exp_h = league_avg_xg * 10^((O_h-D_a)/400) * time_frac
-- delta_h = k * (obs_home - exp_h) / LN10
+- delta_h = k * LN10 / elo_scale * (obs_home - exp_h)
 - O[ht][hl] += delta_h, D[at][al] -= delta_h
 
 **P formula (predict_winner):**
@@ -67,12 +67,12 @@ Comprehensive scan of every numeric value, constant, and formula in the baseline
 
 ---
 
-## 5. Sweep (_run_baseline_elo_sweep.py)
+## 5. Sweep (scripts/run/run_baseline_elo_sweep.py)
 
 | Value | Location | Purpose |
 |-------|----------|---------|
-| quick_test k ranges | 77 | 1.0: 5,10,15,20; 1.1: 5–20 step 5; 2.0: 5–30 step 5 |
-| Full config k ranges | 31-33 | 1.0: 0.1–35 step 0.1; 1.1/2.0: 0.1–100 step 0.1 |
+| quick_test k ranges | 77 | 1.0: 5,10,15,20; 1.1: 5–20 step 5; 2.0: 5–100 step 5 |
+| Full config k ranges | 31-33 | 1.0: 0.1–35 step 0.1; 1.1: 0.1–100; 2.0: 0.1–500 step 0.1 |
 | const_50_brier | 282 | 0.25 |
 | const_50_log | 283 | np.log(2) ≈ 0.693 |
 | league_avg_acc | 284 | 0.5 |
@@ -137,6 +137,6 @@ Comprehensive scan of every numeric value, constant, and formula in the baseline
 
 ## 9. Potential Issues
 
-1. **_calc_brier_logloss.py** uses k=16, 70/30 fold — different from sweep (k=5, 70/30 fold 0). Standalone script, not part of sweep.
+1. **scripts/analysis/calc_brier_logloss.py** uses k=16, 70/30 fold — different from sweep (k=5, 70/30 fold 0). Standalone script, not part of sweep.
 2. **Dashboard Round 1** column "Rating" for 2.0 shows raw net (e.g. -69) — consider labeling "Net (O−D)" for clarity.
 3. **Config quick_test** overrides full k ranges — pipeline_summary reflects quick_test run (k 5,10,15,20 for 1.0).

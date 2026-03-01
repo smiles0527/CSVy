@@ -8,14 +8,14 @@ Quick reference: **which value does what** across all prediction models.
 
 | Value | Default | Models | Purpose |
 |-------|---------|--------|---------|
-| `k_factor` | 32 | all | How much ratings change per game. Higher = more volatile. Sweep tunes over 5–30 or 0.1–100. |
+| `k_factor` | 32 | all | How much ratings change per game. Higher = more volatile. Sweep tunes 2.0 over 0.1–500. |
 | `initial_rating` | 1200 | all | Starting Elo for new teams. Baseline Elo uses 1200 (Enhanced Elo uses 1500). |
 | `elo_scale` | 400 | all | Denominator in win-prob: P = 1/(1+10^(-diff/scale)). 400 = standard Elo; 200-point diff ≈ 76% win prob. |
 | `league_avg_goals` | 3.0 | 1.0, 1.1 | Fallback when converting win prob → predicted goals. |
 | `goal_diff_half_range` | 6.0 | 1.0, 1.1 | Max goals swing from win prob: goals = league_avg ± (range × (win_prob − 0.5)). |
 | `league_avg_xg` | (computed) | 2.0 | xG per hour 5v5 from training data. Used for expected xG in Off/Def updates. |
 | `time_factor` | 1.0 | 2.0 | Multiplier for game-level expected xG (60 min game = 1.0). |
-| `LN10` | ln(10) ≈ 2.3026 | 2.0 | Scales delta: k×(obs−exp)/LN10. Matches log-based Elo convention. |
+| `LN10` | ln(10) ≈ 2.3026 | 2.0 | Part of gradient scaling: delta = k·(LN10/elo_scale)·(obs−exp). |
 
 ### Off/Def (2.0) specifics
 
@@ -25,7 +25,7 @@ Quick reference: **which value does what** across all prediction models.
 | `D` | Defense rating per team, per line. Lower = allows fewer goals. |
 | `Net (O−D)` | Team strength = avg(O−D). Can be negative (league-wide D > O is normal). Higher = stronger. |
 | `multi` | 10^((O−D)/400). Multiplies league_avg_xg for expected xG. |
-| `delta` | k×(obs−exp)/LN10. Added to O, subtracted from D. |
+| `delta` | k·(LN10/elo_scale)·(obs−exp). Added to O, subtracted from D. |
 
 ---
 
@@ -113,7 +113,7 @@ expected_xG = league_avg_xg × multi × time_hours
 
 **Off/Def update:**
 ```
-delta = k × (observed_xG - expected_xG) / ln(10)
+delta = k × (ln(10) / elo_scale) × (observed_xG - expected_xG)
 O_attacker += delta
 D_defender -= delta
 ```

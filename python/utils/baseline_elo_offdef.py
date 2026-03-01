@@ -7,10 +7,10 @@ Updates driven by observed xG vs expected xG. Uses expected wins/losses (xG) not
 2 sets per team: line 1 (O1, D1) and line 2 (O2, D2).
 
 Formulas:
-  multi = 10^((O - D) / 400)
+  multi = 10^((O - D) / elo_scale)
   expected_xG = league_avg * multi * time
-  O += k * (observed_xG - expected_xG) / ln(10)
-  D -= k * (observed_xG - expected_xG) / ln(10)
+  O += k * ln(10) / elo_scale * (observed_xG - expected_xG)
+  D -= k * ln(10) / elo_scale * (observed_xG - expected_xG)
 
 Usage:
     from utils.baseline_elo_offdef import BaselineEloOffDefModel
@@ -155,8 +155,9 @@ class BaselineEloOffDefModel:
             exp_h = self.league_avg_xg * multi_h * self.time_factor
             exp_a = self.league_avg_xg * multi_a * self.time_factor
 
-            delta_h = self.k * (obs_home - exp_h) / LN10
-            delta_a = self.k * (obs_away - exp_a) / LN10
+            # Gradient-consistent: delta = k * (ln10/s) * (obs - exp)
+            delta_h = self.k * LN10 / self.elo_scale * (obs_home - exp_h)
+            delta_a = self.k * LN10 / self.elo_scale * (obs_away - exp_a)
 
             self.O[ht][LINE1] += delta_h
             self.D[at][LINE1] -= delta_h
@@ -228,8 +229,9 @@ class BaselineEloOffDefModel:
             exp_h = self.league_avg_xg * multi_h * time_frac
             exp_a = self.league_avg_xg * multi_a * time_frac
 
-            delta_h = self.k * (obs_home - exp_h) / LN10
-            delta_a = self.k * (obs_away - exp_a) / LN10
+            # Gradient-consistent: delta = k * (ln10/s) * (obs - exp)
+            delta_h = self.k * LN10 / self.elo_scale * (obs_home - exp_h)
+            delta_a = self.k * LN10 / self.elo_scale * (obs_away - exp_a)
 
             self.O[ht][hl] += delta_h
             self.D[at][al] -= delta_h

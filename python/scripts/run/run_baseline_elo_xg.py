@@ -9,13 +9,15 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import json, os, sys, pathlib
 
-_cwd = pathlib.Path(os.path.abspath('')).resolve()
-if (_cwd / 'python').is_dir(): _python_dir = _cwd / 'python'
-elif _cwd.name == 'baseline_elo' and (_cwd.parent.parent / 'data').is_dir(): _python_dir = _cwd.parent.parent
-elif _cwd.name == 'training' and (_cwd.parent / 'data').is_dir(): _python_dir = _cwd.parent
-elif (_cwd / 'data').is_dir(): _python_dir = _cwd
-else: raise RuntimeError('Cannot locate python/')
-
+_script = pathlib.Path(__file__).resolve()
+_python_dir = _script.parent
+while True:
+    if (_python_dir / 'utils').is_dir():
+        break
+    parent = _python_dir.parent
+    if parent == _python_dir:
+        raise RuntimeError('Cannot locate python/')
+    _python_dir = parent
 os.chdir(_python_dir)
 sys.path.insert(0, str(_python_dir))
 from utils.baseline_elo_xg import BaselineEloXGModel

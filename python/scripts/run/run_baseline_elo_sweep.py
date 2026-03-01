@@ -9,18 +9,15 @@ import sys
 import pathlib
 from scipy import stats
 
-_cwd = pathlib.Path(os.path.abspath('')).resolve()
-if (_cwd / 'python').is_dir():
-    _python_dir = _cwd / 'python'
-elif _cwd.name == 'baseline_elo' and (_cwd.parent.parent / 'data').is_dir():
-    _python_dir = _cwd.parent.parent
-elif _cwd.name == 'training' and (_cwd.parent / 'data').is_dir():
-    _python_dir = _cwd.parent
-elif (_cwd / 'data').is_dir():
-    _python_dir = _cwd
-else:
-    raise RuntimeError('Cannot locate python/')
-
+_script = pathlib.Path(__file__).resolve()
+_python_dir = _script.parent
+while True:
+    if (_python_dir / 'utils').is_dir():
+        break
+    parent = _python_dir.parent
+    if parent == _python_dir:
+        raise RuntimeError('Cannot locate python/')
+    _python_dir = parent
 os.chdir(_python_dir)
 sys.path.insert(0, str(_python_dir))
 
@@ -76,10 +73,11 @@ val_cfg = config.get('validation', {})
 _raw_iter = config.get('iterations', {})
 iterations_cfg = {str(k): v for k, v in _raw_iter.items()}
 if _run_2_0_only:
-    _step = 1.0 if '--step1' in sys.argv else 0.1  # 0.1 -> 1000 k values (0.1 to 100)
-    iterations_cfg = {'2.0': {'min': 0.1, 'max': 100, 'step': _step}}
+    _step = 1.0 if '--step1' in sys.argv else 0.1
+    _max = 100 if '--to-100' in sys.argv else 500  # --to-100: 0.1-100 step 0.1 (1000 values)
+    iterations_cfg = {'2.0': {'min': 0.1, 'max': _max, 'step': _step}}
 elif config.get('quick_test'):
-    iterations_cfg = {'1.0': {'min': 5, 'max': 20, 'step': 5}, '1.1': {'min': 5, 'max': 20, 'step': 5}, '2.0': {'min': 5, 'max': 30, 'step': 5}}
+    iterations_cfg = {'1.0': {'min': 5, 'max': 20, 'step': 5}, '1.1': {'min': 5, 'max': 20, 'step': 5}, '2.0': {'min': 5, 'max': 100, 'step': 5}}
 hp = config.get('hyperparameters', {})
 out_cfg = config.get('output', {})
 

@@ -9,17 +9,27 @@ Enhanced Elo Model — Full Pipeline
 5. Generate Round 1 predictions with correct game_id format
 """
 import sys, os, json
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pathlib import Path
+_script = Path(__file__).resolve()
+_python_dir = _script.parent
+while True:
+    if (_python_dir / 'utils').is_dir():
+        break
+    parent = _python_dir.parent
+    if parent == _python_dir:
+        raise RuntimeError('Cannot locate python/')
+    _python_dir = parent
+os.chdir(_python_dir)
+sys.path.insert(0, str(_python_dir))
 
 import pandas as pd
 import numpy as np
-from pathlib import Path
 from itertools import product
 from utils.hockey_features import aggregate_to_games
 from utils.enhanced_elo_model import EnhancedEloModel
 
-OUTPUT = Path(os.path.dirname(__file__)) / 'output' / 'predictions' / 'elo'
-MODEL_DIR = Path(os.path.dirname(__file__)) / 'output' / 'models'
+OUTPUT = _python_dir / 'output' / 'predictions' / 'elo'
+MODEL_DIR = _python_dir / 'output' / 'models'
 OUTPUT.mkdir(parents=True, exist_ok=True)
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -157,7 +167,7 @@ print(f"  80/20 test RMSE: {test_metrics['combined_rmse']:.4f}, WinAcc: {test_me
 
 # ── PHASE 4: Round 1 predictions ─────────────────────────────────
 print("\n[4] Generating Round 1 predictions...")
-matchups = pd.read_excel(os.path.join(os.path.dirname(__file__), 'data', 'WHSDSC_Rnd1_matchups.xlsx'))
+matchups = pd.read_excel(str(_python_dir / 'data' / 'WHSDSC_Rnd1_matchups.xlsx'))
 print(f"  Matchups loaded: {len(matchups)} games")
 print()
 

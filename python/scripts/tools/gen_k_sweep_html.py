@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
 """Generate docs/k_sweep_2_0.html from k_metrics_2_0.csv."""
+import os
 import pandas as pd
 from pathlib import Path
 
+_script = Path(__file__).resolve()
+_python_dir = _script.parent
+while True:
+    if (_python_dir / 'utils').is_dir():
+        break
+    parent = _python_dir.parent
+    if parent == _python_dir:
+        raise RuntimeError('Cannot locate python/')
+    _python_dir = parent
+os.chdir(_python_dir)
+
 csv_path = Path('output/predictions/baseline_elo/sweep/k_metrics_2_0.csv')
-docs_dir = Path(__file__).resolve().parent.parent / 'docs'
+docs_dir = _python_dir.parent / 'docs'
 
 df = pd.read_csv(csv_path)
 df = df.sort_values('accuracy', ascending=False).reset_index(drop=True)

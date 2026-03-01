@@ -1,11 +1,22 @@
 #!/usr/bin/env python3
 """Calculate Brier score and Log loss from baseline_elo predictions."""
+import os
 import numpy as np
 import pandas as pd
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+_script = Path(__file__).resolve()
+_python_dir = _script.parent
+while True:
+    if (_python_dir / 'utils').is_dir():
+        break
+    parent = _python_dir.parent
+    if parent == _python_dir:
+        raise RuntimeError('Cannot locate python/')
+    _python_dir = parent
+os.chdir(_python_dir)
+sys.path.insert(0, str(_python_dir))
 from utils.baseline_elo import BaselineEloModel, get_value
 
 # Load data

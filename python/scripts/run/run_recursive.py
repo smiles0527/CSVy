@@ -12,14 +12,25 @@ Modes:
   hyperparam- Ensemble over prior_weight=10,15,20,25 and decay=0.98,1.0
 
 Usage:
-    python _run_recursive.py                    # 10 runs, both models
-    python _run_recursive.py --baseline-only    # baseline only
-    python _run_recursive.py --mode expand      # expanding-window (temporal)
-    python _run_recursive.py --mode hyperparam  # hyperparameter ensemble
-    python _run_recursive.py 20 --baseline-only --mode bootstrap
+    python scripts/run/run_recursive.py                    # 10 runs, both models
+    python scripts/run/run_recursive.py --baseline-only     # baseline only
+    python scripts/run/run_recursive.py --mode expand      # expanding-window (temporal)
+    python scripts/run/run_recursive.py --mode hyperparam  # hyperparameter ensemble
+    python scripts/run/run_recursive.py 20 --baseline-only --mode bootstrap
 """
 import sys, os, json, argparse
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pathlib import Path
+_script = Path(__file__).resolve()
+_python_dir = _script.parent
+while True:
+    if (_python_dir / 'utils').is_dir():
+        break
+    parent = _python_dir.parent
+    if parent == _python_dir:
+        raise RuntimeError('Cannot locate python/')
+    _python_dir = parent
+os.chdir(_python_dir)
+sys.path.insert(0, str(_python_dir))
 
 import pandas as pd
 import numpy as np
@@ -64,7 +75,7 @@ N_RUNS = args.n_runs
 BASELINE_ONLY = args.baseline_only
 MODE = args.mode
 
-BASE_DIR   = Path(os.path.dirname(__file__))
+BASE_DIR   = _python_dir
 OUTPUT_BL  = BASE_DIR / 'output' / 'predictions' / 'baseline' / 'recursive'
 OUTPUT_ELO = BASE_DIR / 'output' / 'predictions' / 'elo' / 'recursive'
 OUTPUT_BL.mkdir(parents=True, exist_ok=True)

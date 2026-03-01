@@ -968,7 +968,7 @@ def run_dashboard(
     """CLI entry point: load and save dashboard. If also_xg, save xG-only. If also_iterations, save 1.0, 1.1, 2.0."""
     dash = BaselineResultsDashboard()
     if not dash.load():
-        print("No baseline k_metrics found. Run _run_baseline_elo_sweep.py and _run_baseline_elo_xg_sweep.py first.")
+        print("No baseline k_metrics found. Run scripts/run/run_baseline_elo_sweep.py and scripts/run/run_baseline_elo_xg_sweep.py first.")
         return 1
     ok = False
     if PLOTLY_AVAILABLE:
