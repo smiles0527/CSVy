@@ -5,7 +5,7 @@
 - League avg: Brier~0.25, Log~0.6931
 
 ## Best per iteration vs baselines
-- **2.0** (k=100.1): acc=64.9%, brier=0.2474, log=0.6880
+- **2.0** (k=100.0): acc=64.9%, brier=0.2474, log=0.6880
   - Beats constant 50% acc: True
   - Beats Brier baseline: True
 
