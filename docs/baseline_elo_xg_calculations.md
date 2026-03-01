@@ -43,24 +43,24 @@ O_{\mathrm{away}} = 1 - O_{\mathrm{home}}
 
 ## 3. Expected Score (Elo Win Probability)
 
-For team A (rating \(r_a\)) vs team B (rating \(r_b\)), the expected score (win probability) for A:
+For team A (rating \(r_{a}\)) vs team B (rating \(r_{b}\)), the expected score (win probability) for A:
 
 \[
-E_a = \frac{1}{1 + 10^{(r_b - r_a) / s}}
+E_{a} = \frac{1}{1 + 10^{(r_{b} - r_{a}) / s}}
 \]
 
 where \(s\) = `elo_scale` (default 400).
 
 \[
-E_b = 1 - E_a
+E_{b} = 1 - E_{a}
 \]
 
 **Properties**:
-- \(E_a + E_b = 1\)
+- \(E_{a} + E_{b} = 1\)
 - 200-point rating gap → stronger team ≈ 76%
 - 400-point gap → stronger team ≈ 91%
 
-**Fallback**: If \(s \leq 0\), then \(E_a = E_b = 0.5\).
+**Fallback**: If \(s \leq 0\), then \(E_{a} = E_{b} = 0.5\).
 
 ---
 
@@ -69,15 +69,15 @@ E_b = 1 - E_a
 After each match, ratings are updated:
 
 \[
-\Delta_a = k \cdot (O_a - E_a)
+\Delta_{a} = k \cdot (O_{a} - E_{a})
 \]
 
 \[
-\Delta_b = k \cdot (O_b - E_b)
+\Delta_{b} = k \cdot (O_{b} - E_{b})
 \]
 
 \[
-r_a^{\mathrm{new}} = r_a + \Delta_a, \quad r_b^{\mathrm{new}} = r_b + \Delta_b
+r_{a}^{\mathrm{new}} = r_{a} + \Delta_{a}, \quad r_{b}^{\mathrm{new}} = r_{b} + \Delta_{b}
 \]
 
 where \(k\) = `k_factor` (grid-searched 5–100, step 5).
@@ -119,11 +119,11 @@ Elo yields win probability, not xG. We map win probability to expected xG:
 ### 6.1 RMSE (Root Mean Squared Error)
 
 \[
-\mathrm{RMSE}_{\mathrm{home}} = \sqrt{\frac{1}{n}\sum_{i=1}^{n} (y_i^{\mathrm{pred}} - y_i^{\mathrm{actual}})^2}
+\mathrm{RMSE}_{\mathrm{home}} = \sqrt{\frac{1}{n}\sum_{i=1}^{n} (y_{i}^{\mathrm{pred}} - y_{i}^{\mathrm{actual}})^2}
 \]
 
 \[
-\mathrm{RMSE}_{\mathrm{combined}} = \sqrt{\frac{1}{2n}\sum_{i=1}^{n} \left[ (h_i^{\mathrm{pred}} - h_i^{\mathrm{actual}})^2 + (a_i^{\mathrm{pred}} - a_i^{\mathrm{actual}})^2 \right]}
+\mathrm{RMSE}_{\mathrm{combined}} = \sqrt{\frac{1}{2n}\sum_{i=1}^{n} \left[ (h_{i}^{\mathrm{pred}} - h_{i}^{\mathrm{actual}})^2 + (a_{i}^{\mathrm{pred}} - a_{i}^{\mathrm{actual}})^2 \right]}
 \]
 
 where \(h\) = home xG, \(a\) = away xG.
@@ -131,13 +131,13 @@ where \(h\) = home xG, \(a\) = away xG.
 ### 6.2 MAE (Mean Absolute Error)
 
 \[
-\mathrm{MAE} = \frac{1}{n}\sum_{i=1}^{n} |y_i^{\mathrm{pred}} - y_i^{\mathrm{actual}}|
+\mathrm{MAE} = \frac{1}{n}\sum_{i=1}^{n} |y_{i}^{\mathrm{pred}} - y_{i}^{\mathrm{actual}}|
 \]
 
 ### 6.3 R² (Coefficient of Determination)
 
 \[
-R^2 = 1 - \frac{\sum (y_i^{\text{actual}} - y_i^{\text{pred}})^2}{\sum (y_i^{\text{actual}} - \bar{y})^2}
+R^2 = 1 - \frac{\sum (y_{i}^{\mathrm{actual}} - y_{i}^{\mathrm{pred}})^2}{\sum (y_{i}^{\mathrm{actual}} - \bar{y})^2}
 \]
 
 If all actual values are identical, \(R^2 = 0\) (avoids division issues).
@@ -184,7 +184,7 @@ where \(E_A, E_B\) are clipped to \([\epsilon, 1-\epsilon]\) (e.g. \(\epsilon = 
 | Parameter | Symbol | Default | Role | Grid? |
 |-----------|--------|---------|------|-------|
 | `k_factor` | \(k\) | 32 | Rating volatility per game | Yes (5–100, step 5) |
-| `initial_rating` | \(r_0\) | 1200 | Starting rating for new teams | Yes (fixed 1200) |
+| `initial_rating` | \(r_{0}\) | 1200 | Starting rating for new teams | Yes (fixed 1200) |
 | `elo_scale` | \(s\) | 400 | Divisor in expected-score formula | No |
 | `league_avg_goals` | \(\mu\) | 3.0 | Baseline xG per team | No |
 | `goal_diff_half_range` | \(g_{\mathrm{half}}\) | 6.0 | Win-prob → xG spread | No |

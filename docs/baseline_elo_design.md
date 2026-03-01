@@ -43,26 +43,26 @@ A design specification for the Baseline Elo family: **1.0 (Goals)**, **1.1 (xG)*
 
 ### 2.2 Outcome Encoding
 
-- \(hg > ag\) → home wins → \(O_{home} = 1, O_{away} = 0\)
-- \(hg \leq ag\) (including ties) → home loses → \(O_{home} = 0, O_{away} = 1\)
+- \(hg > ag\) → home wins → \(O_{\mathrm{home}} = 1,\ O_{\mathrm{away}} = 0\)
+- \(hg \leq ag\) (including ties) → home loses → \(O_{\mathrm{home}} = 0,\ O_{\mathrm{away}} = 1\)
 
 ### 2.3 Expected Score (Win Probability)
 
-For team A (rating \(r_a\)) vs team B (rating \(r_b\)):
+For team A (rating \(r_{a}\)) vs team B (rating \(r_{b}\)):
 
 $$
-E_a = \frac{1}{1 + 10^{(r_b - r_a) / s}}
+E_{a} = \frac{1}{1 + 10^{(r_{b} - r_{a}) / s}}
 $$
 
-with \(s\) = `elo_scale` (default 400). \(E_a + E_b = 1\).
+with \(s\) = `elo_scale` (default 400). \(E_{a} + E_{b} = 1\).
 
 ### 2.4 Rating Update (Zero-Sum)
 
 $$
-\Delta_a = k \cdot (O_a - E_a), \quad \Delta_b = k \cdot (O_b - E_b)
+\Delta_{a} = k \cdot (O_{a} - E_{a}), \quad \Delta_{b} = k \cdot (O_{b} - E_{b})
 $$
 
-\(O_a, O_b \in \{0, 1\}\), \(O_a + O_b = 1\). \(\Delta_a + \Delta_b = 0\).
+\(O_{a}, O_{b} \in \{0, 1\}\), \(O_{a} + O_{b} = 1\). \(\Delta_{a} + \Delta_{b} = 0\).
 
 ### 2.5 Goal Prediction (Derived)
 
@@ -77,7 +77,7 @@ $$
 $$
 
 - \(\mu\) = `league_avg_goals` (default 3.0)
-- \(g_{half}\) = `goal_diff_half_range` (default 6)
+- \(g_{\mathrm{half}}\) = `goal_diff_half_range` (default 6)
 
 ---
 
@@ -91,12 +91,12 @@ $$
 
 ### 3.2 Outcome Encoding
 
-- home_xg > away_xg → home wins → \(O_{home} = 1, O_{away} = 0\)
-- Otherwise → home loses → \(O_{home} = 0, O_{away} = 1\)
+- home_xg > away_xg → home wins → \(O_{\mathrm{home}} = 1,\ O_{\mathrm{away}} = 0\)
+- Otherwise → home loses → \(O_{\mathrm{home}} = 0,\ O_{\mathrm{away}} = 1\)
 
 ### 3.3 Expected Score & Rating Update
 
-Same as 1.0: \(E_a = 1/(1 + 10^{(r_b - r_a)/s})\), \(\Delta_a = k(O_a - E_a)\).
+Same as 1.0: \(E_{a} = 1/(1 + 10^{(r_{b} - r_{a})/s})\), \(\Delta_{a} = k(O_{a} - E_{a})\).
 
 ### 3.4 xG Prediction (Derived)
 
@@ -127,13 +127,13 @@ $$
 
 - **Shift-level (preferred)**: `home_team`, `away_team`, `home_xg`, `away_xg`, `home_off_line`, `away_off_line`, `toi`, `game_id`.
 - **Lines**: Only `first_off` and `second_off` (L1, L2).
-- **TOI delta**: \(t_\Delta = \mathrm{toi}_{\mathrm{current}} - \mathrm{toi}_{\mathrm{previous}}\) within each game (assumes cumulative toi or ordered shifts). First row per game: \(t_\Delta = \mathrm{toi}\). If \(t_\Delta \leq 0\), fallback to raw toi.
+- **TOI delta**: \(t_{\Delta} = \mathrm{toi}_{\mathrm{current}} - \mathrm{toi}_{\mathrm{previous}}\) within each game (assumes cumulative toi or ordered shifts). First row per game: \(t_{\Delta} = \mathrm{toi}\). If \(t_{\Delta} \leq 0\), fallback to raw toi.
 - **Game-level fallback**: If no line/TOI columns, treat entire game as line 1.
 
 ### 4.3 League Average xG Rate
 
 $$
-\mathrm{league\_avg\_xg} = \frac{\sum \mathrm{xG}}{\sum t_\Delta / 3600}
+\mathrm{league\_avg\_xg} = \frac{\sum \mathrm{xG}}{\sum t_{\Delta} / 3600}
 $$
 
 xG per hour (5v5). Used as baseline for expected xG.
@@ -143,41 +143,41 @@ xG per hour (5v5). Used as baseline for expected xG.
 For a matchup: home line \(h\) vs away line \(a\), and away line \(a\) vs home line \(h\):
 
 $$
-\mathrm{multi}_h = 10^{(O_h - D_a) / s}, \quad \mathrm{multi}_a = 10^{(O_a - D_h) / s}
+\mathrm{multi}_{h} = 10^{(O_{h} - D_{a}) / s}, \quad \mathrm{multi}_{a} = 10^{(O_{a} - D_{h}) / s}
 $$
 
 $$
-\mathrm{exp\_home\_xg} = \mathrm{league\_avg\_xg} \cdot \mathrm{multi}_h \cdot \frac{t_\Delta}{3600}
+\mathrm{exp\_home\_xg} = \mathrm{league\_avg\_xg} \cdot \mathrm{multi}_{h} \cdot \frac{t_{\Delta}}{3600}
 $$
 
 $$
-\mathrm{exp\_away\_xg} = \mathrm{league\_avg\_xg} \cdot \mathrm{multi}_a \cdot \frac{t_\Delta}{3600}
+\mathrm{exp\_away\_xg} = \mathrm{league\_avg\_xg} \cdot \mathrm{multi}_{a} \cdot \frac{t_{\Delta}}{3600}
 $$
 
-- \(t_\Delta\) in seconds; divided by 3600 for hours.
-- Minimum \(t_\Delta/3600 = 0.001\) to avoid zero.
+- \(t_{\Delta}\) in seconds; divided by 3600 for hours.
+- Minimum \(t_{\Delta}/3600 = 0.001\) to avoid zero.
 
 ### 4.5 O/D Rating Update
 
 $$
-\delta_h = k \cdot \frac{o_h - e_h}{\ln(10)}
+\delta_{h} = k \cdot \frac{o_{h} - e_{h}}{\ln(10)}
 $$
 
 $$
-\delta_a = k \cdot \frac{o_a - e_a}{\ln(10)}
+\delta_{a} = k \cdot \frac{o_{a} - e_{a}}{\ln(10)}
 $$
 
-where \(o_h\) = observed home xG, \(e_h\) = expected home xG (and similarly for away).
+where \(o_{h}\) = observed home xG, \(e_{h}\) = expected home xG (and similarly for away).
 
-- \(O_h \mathrel{+}= \delta_h\), \(D_a \mathrel{-}= \delta_h\) (home offense vs away defense)
-- \(O_a \mathrel{+}= \delta_a\), \(D_h \mathrel{-}= \delta_a\) (away offense vs home defense)
+- \(O_{h} \mathrel{+}= \delta_{h}\), \(D_{a} \mathrel{-}= \delta_{h}\) (home offense vs away defense)
+- \(O_{a} \mathrel{+}= \delta_{a}\), \(D_{h} \mathrel{-}= \delta_{a}\) (away offense vs home defense)
 
 ### 4.6 Net Rating & Win Probability
 
 - **Net (O−D)**: Per team, average of (O−D) over L1 and L2. Can be negative; higher = stronger.
 - **Predict winner**: Uses Elo formula on rating diff:
   \[
-  d = (O_h - D_a) - (O_a - D_h)
+  d = (O_{h} - D_{a}) - (O_{a} - D_{h})
   \]
   \[
   P_{\mathrm{home}} = \frac{1}{1 + 10^{-d/s}}
@@ -224,7 +224,7 @@ When no shift/line data: one O and D per team (line 1 only). `league_avg_xg` = t
 | NaN team names | Coerced to Unknown | Coerced to Unknown |
 | Unknown team at predict | Uses initial_rating | Uses initial_rating |
 | No line/TOI columns | N/A | Game-level fallback |
-| \(t_\Delta \leq 0\) | N/A | Fallback to raw toi |
+| \(t_{\Delta} \leq 0\) | N/A | Fallback to raw toi |
 | Empty DataFrame | Zero metrics | Zero metrics |
 
 ---
