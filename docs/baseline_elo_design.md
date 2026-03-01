@@ -259,8 +259,10 @@ where \(o_h\) = observed home xG, \(e_h\) = expected home xG, \(s\) = `elo_scale
 **Team net (for ranking)**:
 
 $$
-\mathrm{Net} = \frac{1}{2}\bigl[ (O_{L1} - D_{L1}) + (O_{L2} - D_{L2}) \bigr]
+\mathrm{Net} = w_1 (O_{L1} - D_{L1}) + w_2 (O_{L2} - D_{L2})
 $$
+
+with \(w_1 + w_2 = 1\). Weights \(w_1, w_2\) come from empirical TOI shares during fit (L1 TOI / total TOI, L2 TOI / total TOI). When no shift/TOI data (game-level fallback), defaults to \(w_1 = w_2 = 0.5\).
 
 - Can be negative (league-wide D > O is normal). Higher = stronger.
 
@@ -270,7 +272,7 @@ $$
 d = (O_h - D_a) - (O_a - D_h)
 $$
 
-where \(O_h, D_h, O_a, D_a\) are *averaged* over L1 and L2 for game-level prediction.
+where \(O_h, D_h, O_a, D_a\) are *TOI-weighted* over L1 and L2 for game-level prediction.
 
 $$
 P_{\mathrm{home}} = \frac{1}{1 + 10^{-d/s}}
@@ -278,7 +280,7 @@ $$
 
 **Predict xG (game-level)**:
 
-- Uses mean O, mean D over lines for each team.
+- Uses TOI-weighted O, D over lines for each team.
 - \(\mathrm{predHomeXg} = \max(0, \mathrm{league\_avg\_xg} \cdot \mathrm{multi}_h \cdot \mathrm{time\_factor})\)
 - \(\mathrm{time\_factor} = 1.0\) = one game unit (60 min equivalent).
 - \(\mathrm{league\_avg\_xg}\) fallback = 3.0 if not computed.
@@ -290,7 +292,7 @@ Predictions depend only on differences \((O_h - D_a)\) and \((O_a - D_h)\). Addi
 ### 5.8 Ranking (2.0)
 
 - **get_rankings()**: Returns `(team, net)` sorted by net descending.
-- **Net**: Average of (O−D) over L1 and L2. Can be negative; typical range ~−120 to −65 (or positive with gradient formula).
+- **Net**: TOI-weighted average of (O−D) over L1 and L2: \(w_1(O_{L1}-D_{L1}) + w_2(O_{L2}-D_{L2})\). Can be negative; typical range ~−120 to −65 (or positive with gradient formula).
 - **P (dashboard)**: \(P(\text{beats avg}) = 1/(1 + 10^{-(\mathrm{net} - \bar{\mathrm{net}})/s})\).
 
 ---
@@ -301,7 +303,7 @@ Predictions depend only on differences \((O_h - D_a)\) and \((O_a - D_h)\). Addi
 |-------|-------------|---------------------|------|-----------|---------------|
 | **1.0** | Single Elo \(r\) | (team, r) | desc by r | \(1/(1+10^{-(r-\bar{r})/s})\) | 1100–1300 |
 | **1.1** | Single Elo \(r\) | (team, r) | desc by r | same | 1100–1300 |
-| **2.0** | Net = avg(O−D) | (team, net) | desc by net | same, net as "rating" | −120 to −65 or positive |
+| **2.0** | Net = TOI-weighted avg(O−D) | (team, net) | desc by net | same, net as "rating" | −120 to −65 or positive |
 
 **Dashboard P**: For any model, P = probability team beats league-average opposition. \(\mathrm{diff} = \mathrm{rating} - \mathrm{mean}(\mathrm{ratings})\); \(P = 1/(1 + 10^{-\mathrm{diff}/s})\).
 
@@ -362,3 +364,4 @@ Predictions depend only on differences \((O_h - D_a)\) and \((O_a - D_h)\). Addi
 - `docs/baseline_elo_xg_calculations.md` — detailed 1.1 formulas.
 - `docs/baseline_elo_offdef_calculations.md` — 2.0 derivation (Poisson gradient).
 - `docs/baseline_elo_2_0_CHANGES.md` — change log for 2.0 gradient fix.
+- `docs/baseline_elo_2_0_TOI_WEIGHTS.md` — TOI-weighted ranking and prediction.

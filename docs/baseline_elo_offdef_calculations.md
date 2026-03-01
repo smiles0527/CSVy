@@ -103,13 +103,19 @@ So O and D are identified only up to an additive constant. Raw O/D tables are no
 
 ## 6. Net Rating & Win Probability
 
-**Team net (ranking):**
+**Team net (ranking):** TOI-weighted average of line nets:
 
 \[
-\mathrm{Net} = \frac{1}{2}\bigl[ (O_{L1} - D_{L1}) + (O_{L2} - D_{L2}) \bigr]
+\mathrm{Net} = w_1 (O_{L1} - D_{L1}) + w_2 (O_{L2} - D_{L2})
 \]
 
-**Win probability:**
+where \(w_1 + w_2 = 1\). Weights are derived from empirical TOI shares during fit:
+
+- For each shift, accumulate \(t_{\Delta}\) (seconds) to the team’s line (home team + home_off_line, away team + away_off_line).
+- For each team: \(w_1 = \mathrm{TOI}_{L1} / (\mathrm{TOI}_{L1} + \mathrm{TOI}_{L2})\), \(w_2 = 1 - w_1\).
+- Fallback: when no shift/TOI data (game-level fit), \(w_1 = w_2 = 0.5\).
+
+**Win probability:** Uses the same TOI-weighted O and D for game-level prediction:
 
 \[
 d = (O_h - D_a) - (O_a - D_h)
@@ -124,5 +130,6 @@ P_{\mathrm{home}} = \frac{1}{1 + 10^{-d/s}}
 ## References
 
 - `docs/baseline_elo_design.md` — design specification
+- `docs/baseline_elo_2_0_TOI_WEIGHTS.md` — TOI-weighted ranking changes
 - `python/utils/baseline_elo_offdef.py` — implementation
 - `docs/baseline_elo_xg_calculations.md` — 1.1 (game-level xG) formulas

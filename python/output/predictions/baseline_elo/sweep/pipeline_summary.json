@@ -4,13 +4,13 @@
     "2.0"
   ],
   "best_iteration": "2.0",
-  "best_k": 100.0,
+  "best_k": 100.1,
   "train_ratio": 0.7,
   "n_games": 1312,
   "n_train": 919,
   "n_test": 393,
   "best_params": {
-    "k_factor": 100.0,
+    "k_factor": 100.1,
     "initial_rating": 1200,
     "elo_scale": 400,
     "league_avg_goals": 3.0,
@@ -18,72 +18,72 @@
   },
   "team_rankings": {
     "serbia": -153.6,
-    "pakistan": -157.3,
+    "pakistan": -157.4,
     "oman": -159.3,
-    "usa": -160.5,
+    "usa": -160.6,
     "uk": -161.0,
-    "singapore": -162.7,
-    "south_korea": -162.8,
-    "thailand": -163.5,
-    "guatemala": -165.5,
-    "panama": -166.3,
-    "morocco": -167.2,
+    "singapore": -162.6,
+    "south_korea": -162.9,
+    "thailand": -163.6,
+    "guatemala": -166.0,
+    "panama": -166.5,
+    "morocco": -167.6,
     "brazil": -168.2,
-    "germany": -168.9,
-    "new_zealand": -170.1,
-    "canada": -170.4,
-    "ethiopia": -170.9,
-    "rwanda": -171.9,
-    "china": -172.6,
+    "germany": -169.1,
+    "new_zealand": -170.2,
+    "canada": -170.7,
+    "ethiopia": -171.0,
+    "rwanda": -172.0,
+    "china": -172.7,
     "iceland": -172.8,
-    "vietnam": -172.8,
-    "france": -174.1,
-    "india": -175.0,
-    "mexico": -176.7,
-    "indonesia": -178.8,
-    "philippines": -181.2,
-    "mongolia": -181.5,
-    "peru": -183.0,
-    "netherlands": -185.4,
-    "uae": -186.0,
-    "kazakhstan": -186.8,
+    "vietnam": -172.9,
+    "france": -174.4,
+    "india": -175.1,
+    "mexico": -176.8,
+    "indonesia": -179.1,
+    "philippines": -181.3,
+    "mongolia": -181.6,
+    "peru": -183.1,
+    "netherlands": -185.5,
+    "uae": -186.1,
+    "kazakhstan": -186.9,
     "saudi_arabia": -187.2,
-    "switzerland": -187.9
+    "switzerland": -188.0
   },
   "team_rankings_by_iteration": {
     "2.0": {
-      "serbia": -97.0,
-      "pakistan": -99.0,
-      "oman": -100.9,
-      "south_korea": -101.4,
-      "usa": -101.5,
-      "guatemala": -102.6,
-      "uk": -103.1,
-      "thailand": -103.1,
-      "panama": -103.2,
-      "singapore": -104.2,
-      "morocco": -104.5,
-      "brazil": -104.7,
+      "serbia": -97.1,
+      "pakistan": -99.1,
+      "oman": -101.0,
+      "south_korea": -101.5,
+      "usa": -101.7,
+      "guatemala": -102.8,
+      "uk": -103.2,
+      "thailand": -103.2,
+      "panama": -103.4,
+      "singapore": -104.3,
+      "brazil": -104.9,
+      "morocco": -104.9,
       "rwanda": -106.0,
-      "canada": -106.5,
-      "germany": -106.5,
-      "new_zealand": -107.2,
-      "vietnam": -107.8,
-      "ethiopia": -107.9,
-      "china": -107.9,
-      "iceland": -109.6,
-      "france": -109.8,
-      "mexico": -110.8,
-      "india": -111.4,
-      "mongolia": -111.6,
+      "canada": -106.6,
+      "germany": -106.6,
+      "new_zealand": -107.3,
+      "vietnam": -107.9,
+      "ethiopia": -108.0,
+      "china": -108.0,
+      "iceland": -109.7,
+      "france": -110.1,
+      "mexico": -110.9,
+      "india": -111.5,
+      "mongolia": -111.7,
       "philippines": -111.9,
-      "indonesia": -112.2,
-      "uae": -113.3,
-      "netherlands": -114.2,
-      "peru": -114.3,
-      "kazakhstan": -115.8,
-      "saudi_arabia": -115.8,
-      "switzerland": -116.7
+      "indonesia": -112.3,
+      "uae": -113.4,
+      "netherlands": -114.3,
+      "peru": -114.4,
+      "kazakhstan": -115.9,
+      "saudi_arabia": -115.9,
+      "switzerland": -116.9
     }
   },
   "predictions": [
@@ -94,7 +94,7 @@
       "pred_home": 5.53,
       "pred_away": 4.64,
       "predicted_winner": "brazil",
-      "confidence": 0.5441,
+      "confidence": 0.5438,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -103,9 +103,9 @@
       "home_team": "netherlands",
       "away_team": "mongolia",
       "pred_home": 5.23,
-      "pred_away": 4.59,
+      "pred_away": 4.58,
       "predicted_winner": "netherlands",
-      "confidence": 0.5326,
+      "confidence": 0.5328,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -114,9 +114,9 @@
       "home_team": "peru",
       "away_team": "rwanda",
       "pred_home": 5.15,
-      "pred_away": 4.99,
+      "pred_away": 4.98,
       "predicted_winner": "peru",
-      "confidence": 0.508,
+      "confidence": 0.5081,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -125,9 +125,9 @@
       "home_team": "thailand",
       "away_team": "oman",
       "pred_home": 5.81,
-      "pred_away": 5.32,
+      "pred_away": 5.31,
       "predicted_winner": "thailand",
-      "confidence": 0.5222,
+      "confidence": 0.5223,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -136,7 +136,7 @@
       "home_team": "pakistan",
       "away_team": "germany",
       "pred_home": 5.88,
-      "pred_away": 5.15,
+      "pred_away": 5.14,
       "predicted_winner": "pakistan",
       "confidence": 0.5332,
       "model_iteration": "2.0",
@@ -149,7 +149,7 @@
       "pred_home": 5.42,
       "pred_away": 5.29,
       "predicted_winner": "india",
-      "confidence": 0.5059,
+      "confidence": 0.506,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -158,9 +158,9 @@
       "home_team": "panama",
       "away_team": "switzerland",
       "pred_home": 5.16,
-      "pred_away": 5.0,
+      "pred_away": 4.99,
       "predicted_winner": "panama",
-      "confidence": 0.508,
+      "confidence": 0.5084,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -168,10 +168,10 @@
       "game": 8,
       "home_team": "iceland",
       "away_team": "canada",
-      "pred_home": 5.19,
-      "pred_away": 5.3,
+      "pred_home": 5.18,
+      "pred_away": 5.29,
       "predicted_winner": "canada",
-      "confidence": 0.5052,
+      "confidence": 0.5053,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -179,10 +179,10 @@
       "game": 9,
       "home_team": "china",
       "away_team": "france",
-      "pred_home": 5.35,
+      "pred_home": 5.34,
       "pred_away": 5.03,
       "predicted_winner": "china",
-      "confidence": 0.5153,
+      "confidence": 0.5148,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -190,10 +190,10 @@
       "game": 10,
       "home_team": "philippines",
       "away_team": "morocco",
-      "pred_home": 5.0,
-      "pred_away": 5.33,
+      "pred_home": 4.99,
+      "pred_away": 5.32,
       "predicted_winner": "morocco",
-      "confidence": 0.5157,
+      "confidence": 0.5159,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -201,10 +201,10 @@
       "game": 11,
       "home_team": "ethiopia",
       "away_team": "saudi_arabia",
-      "pred_home": 5.08,
+      "pred_home": 5.07,
       "pred_away": 4.96,
       "predicted_winner": "ethiopia",
-      "confidence": 0.5057,
+      "confidence": 0.5055,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -215,7 +215,7 @@
       "pred_home": 5.29,
       "pred_away": 5.51,
       "predicted_winner": "new_zealand",
-      "confidence": 0.51,
+      "confidence": 0.5099,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -223,10 +223,10 @@
       "game": 13,
       "home_team": "guatemala",
       "away_team": "south_korea",
-      "pred_home": 5.44,
+      "pred_home": 5.43,
       "pred_away": 5.5,
       "predicted_winner": "south_korea",
-      "confidence": 0.5026,
+      "confidence": 0.5031,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -234,10 +234,10 @@
       "game": 14,
       "home_team": "uk",
       "away_team": "mexico",
-      "pred_home": 5.16,
+      "pred_home": 5.15,
       "pred_away": 5.5,
       "predicted_winner": "mexico",
-      "confidence": 0.516,
+      "confidence": 0.5161,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -248,7 +248,7 @@
       "pred_home": 5.37,
       "pred_away": 5.63,
       "predicted_winner": "serbia",
-      "confidence": 0.5116,
+      "confidence": 0.5117,
       "model_iteration": "2.0",
       "pred_type": "xg"
     },
@@ -256,10 +256,10 @@
       "game": 16,
       "home_team": "indonesia",
       "away_team": "uae",
-      "pred_home": 4.9,
+      "pred_home": 4.89,
       "pred_away": 4.95,
       "predicted_winner": "uae",
-      "confidence": 0.5029,
+      "confidence": 0.5026,
       "model_iteration": "2.0",
       "pred_type": "xg"
     }
@@ -273,224 +273,34 @@
     "league_avg_xg_per_hour_5v5": 14.0885
   },
   "line_ratings": {
-    "guatemala": {
+    "south_korea": {
       "O": {
-        "second_off": 1146.2,
-        "first_off": 1155.1
+        "second_off": 1150.5,
+        "first_off": 1152.2
       },
       "D": {
-        "second_off": 1255.1,
-        "first_off": 1251.4
-      }
-    },
-    "iceland": {
-      "O": {
-        "second_off": 1142.7,
-        "first_off": 1146.9
-      },
-      "D": {
-        "second_off": 1252.7,
-        "first_off": 1256.2
-      }
-    },
-    "indonesia": {
-      "O": {
-        "second_off": 1142.2,
-        "first_off": 1139.4
-      },
-      "D": {
-        "second_off": 1248.4,
-        "first_off": 1257.5
-      }
-    },
-    "morocco": {
-      "O": {
-        "second_off": 1150.6,
-        "first_off": 1144.7
-      },
-      "D": {
-        "second_off": 1248.9,
-        "first_off": 1255.5
-      }
-    },
-    "serbia": {
-      "O": {
-        "second_off": 1150.3,
-        "first_off": 1152.3
-      },
-      "D": {
-        "second_off": 1246.9,
-        "first_off": 1249.7
-      }
-    },
-    "netherlands": {
-      "O": {
-        "second_off": 1142.6,
-        "first_off": 1144.6
-      },
-      "D": {
-        "second_off": 1255.7,
-        "first_off": 1259.9
-      }
-    },
-    "pakistan": {
-      "O": {
-        "second_off": 1153.5,
-        "first_off": 1156.1
-      },
-      "D": {
-        "second_off": 1254.3,
-        "first_off": 1253.3
-      }
-    },
-    "saudi_arabia": {
-      "O": {
-        "second_off": 1139.0,
-        "first_off": 1142.2
-      },
-      "D": {
-        "second_off": 1254.0,
-        "first_off": 1258.8
-      }
-    },
-    "india": {
-      "O": {
-        "second_off": 1144.3,
-        "first_off": 1144.6
-      },
-      "D": {
-        "second_off": 1254.0,
-        "first_off": 1257.7
-      }
-    },
-    "uk": {
-      "O": {
-        "second_off": 1144.8,
-        "first_off": 1152.1
-      },
-      "D": {
-        "second_off": 1249.2,
-        "first_off": 1254.0
-      }
-    },
-    "mongolia": {
-      "O": {
-        "second_off": 1137.9,
-        "first_off": 1141.4
-      },
-      "D": {
-        "second_off": 1249.1,
-        "first_off": 1253.4
-      }
-    },
-    "france": {
-      "O": {
-        "second_off": 1143.9,
-        "first_off": 1145.2
-      },
-      "D": {
-        "second_off": 1249.9,
-        "first_off": 1258.8
-      }
-    },
-    "germany": {
-      "O": {
-        "second_off": 1147.3,
-        "first_off": 1143.9
-      },
-      "D": {
-        "second_off": 1251.7,
-        "first_off": 1252.6
+        "second_off": 1249.8,
+        "first_off": 1255.8
       }
     },
     "mexico": {
       "O": {
         "second_off": 1145.6,
-        "first_off": 1149.4
+        "first_off": 1149.3
       },
       "D": {
-        "second_off": 1257.8,
+        "second_off": 1257.9,
         "first_off": 1258.8
       }
     },
-    "panama": {
+    "france": {
       "O": {
-        "second_off": 1148.8,
-        "first_off": 1149.2
+        "second_off": 1143.8,
+        "first_off": 1145.2
       },
       "D": {
-        "second_off": 1248.0,
-        "first_off": 1256.3
-      }
-    },
-    "canada": {
-      "O": {
-        "second_off": 1146.8,
-        "first_off": 1148.4
-      },
-      "D": {
-        "second_off": 1249.0,
-        "first_off": 1259.1
-      }
-    },
-    "oman": {
-      "O": {
-        "second_off": 1148.8,
-        "first_off": 1151.1
-      },
-      "D": {
-        "second_off": 1249.1,
-        "first_off": 1252.7
-      }
-    },
-    "philippines": {
-      "O": {
-        "second_off": 1140.7,
-        "first_off": 1142.5
-      },
-      "D": {
-        "second_off": 1252.6,
-        "first_off": 1254.3
-      }
-    },
-    "usa": {
-      "O": {
-        "second_off": 1143.6,
-        "first_off": 1153.0
-      },
-      "D": {
-        "second_off": 1250.8,
-        "first_off": 1248.8
-      }
-    },
-    "ethiopia": {
-      "O": {
-        "second_off": 1148.2,
-        "first_off": 1143.4
-      },
-      "D": {
-        "second_off": 1253.5,
-        "first_off": 1253.8
-      }
-    },
-    "singapore": {
-      "O": {
-        "second_off": 1143.4,
-        "first_off": 1149.5
-      },
-      "D": {
-        "second_off": 1251.4,
-        "first_off": 1249.9
-      }
-    },
-    "brazil": {
-      "O": {
-        "second_off": 1148.5,
-        "first_off": 1154.6
-      },
-      "D": {
-        "second_off": 1255.2,
-        "first_off": 1257.3
+        "second_off": 1250.0,
+        "first_off": 1258.8
       }
     },
     "thailand": {
@@ -503,84 +313,134 @@
         "first_off": 1253.3
       }
     },
-    "new_zealand": {
+    "india": {
       "O": {
-        "second_off": 1143.9,
-        "first_off": 1149.1
+        "second_off": 1144.2,
+        "first_off": 1144.6
       },
       "D": {
-        "second_off": 1251.2,
-        "first_off": 1256.2
+        "second_off": 1254.0,
+        "first_off": 1257.7
       }
     },
     "rwanda": {
       "O": {
         "second_off": 1145.0,
-        "first_off": 1147.7
+        "first_off": 1147.6
       },
       "D": {
-        "second_off": 1251.1,
+        "second_off": 1251.2,
         "first_off": 1253.5
       }
     },
-    "uae": {
+    "brazil": {
       "O": {
-        "second_off": 1136.9,
-        "first_off": 1144.4
+        "second_off": 1148.4,
+        "first_off": 1154.5
       },
       "D": {
-        "second_off": 1254.7,
-        "first_off": 1253.2
+        "second_off": 1255.3,
+        "first_off": 1257.3
       }
     },
-    "south_korea": {
+    "pakistan": {
       "O": {
-        "second_off": 1150.5,
-        "first_off": 1152.3
+        "second_off": 1153.5,
+        "first_off": 1156.1
       },
       "D": {
-        "second_off": 1249.8,
-        "first_off": 1255.8
+        "second_off": 1254.4,
+        "first_off": 1253.3
       }
     },
-    "kazakhstan": {
+    "mongolia": {
       "O": {
-        "second_off": 1139.4,
-        "first_off": 1139.5
+        "second_off": 1137.9,
+        "first_off": 1141.4
       },
       "D": {
-        "second_off": 1252.2,
-        "first_off": 1258.3
+        "second_off": 1249.1,
+        "first_off": 1253.5
       }
     },
-    "peru": {
+    "oman": {
       "O": {
-        "second_off": 1142.3,
-        "first_off": 1146.4
+        "second_off": 1148.8,
+        "first_off": 1151.1
       },
       "D": {
-        "second_off": 1256.6,
-        "first_off": 1260.7
+        "second_off": 1249.1,
+        "first_off": 1252.7
       }
     },
-    "vietnam": {
+    "uk": {
       "O": {
-        "second_off": 1145.3,
-        "first_off": 1143.5
+        "second_off": 1144.8,
+        "first_off": 1152.1
       },
       "D": {
-        "second_off": 1250.3,
-        "first_off": 1254.1
+        "second_off": 1249.2,
+        "first_off": 1254.0
+      }
+    },
+    "panama": {
+      "O": {
+        "second_off": 1148.8,
+        "first_off": 1149.1
+      },
+      "D": {
+        "second_off": 1248.0,
+        "first_off": 1256.4
+      }
+    },
+    "singapore": {
+      "O": {
+        "second_off": 1143.3,
+        "first_off": 1149.5
+      },
+      "D": {
+        "second_off": 1251.5,
+        "first_off": 1249.9
       }
     },
     "switzerland": {
       "O": {
         "second_off": 1142.5,
-        "first_off": 1138.7
+        "first_off": 1138.6
       },
       "D": {
         "second_off": 1253.8,
-        "first_off": 1260.9
+        "first_off": 1261.0
+      }
+    },
+    "canada": {
+      "O": {
+        "second_off": 1146.8,
+        "first_off": 1148.4
+      },
+      "D": {
+        "second_off": 1249.1,
+        "first_off": 1259.1
+      }
+    },
+    "iceland": {
+      "O": {
+        "second_off": 1142.7,
+        "first_off": 1146.9
+      },
+      "D": {
+        "second_off": 1252.7,
+        "first_off": 1256.2
+      }
+    },
+    "ethiopia": {
+      "O": {
+        "second_off": 1148.2,
+        "first_off": 1143.4
+      },
+      "D": {
+        "second_off": 1253.5,
+        "first_off": 1253.8
       }
     },
     "china": {
@@ -591,6 +451,146 @@
       "D": {
         "second_off": 1255.9,
         "first_off": 1255.4
+      }
+    },
+    "usa": {
+      "O": {
+        "second_off": 1143.5,
+        "first_off": 1153.0
+      },
+      "D": {
+        "second_off": 1250.9,
+        "first_off": 1248.8
+      }
+    },
+    "new_zealand": {
+      "O": {
+        "second_off": 1143.8,
+        "first_off": 1149.0
+      },
+      "D": {
+        "second_off": 1251.2,
+        "first_off": 1256.3
+      }
+    },
+    "guatemala": {
+      "O": {
+        "second_off": 1146.2,
+        "first_off": 1155.1
+      },
+      "D": {
+        "second_off": 1255.1,
+        "first_off": 1251.4
+      }
+    },
+    "philippines": {
+      "O": {
+        "second_off": 1140.7,
+        "first_off": 1142.5
+      },
+      "D": {
+        "second_off": 1252.7,
+        "first_off": 1254.3
+      }
+    },
+    "germany": {
+      "O": {
+        "second_off": 1147.3,
+        "first_off": 1143.9
+      },
+      "D": {
+        "second_off": 1251.7,
+        "first_off": 1252.6
+      }
+    },
+    "indonesia": {
+      "O": {
+        "second_off": 1142.2,
+        "first_off": 1139.3
+      },
+      "D": {
+        "second_off": 1248.4,
+        "first_off": 1257.6
+      }
+    },
+    "kazakhstan": {
+      "O": {
+        "second_off": 1139.4,
+        "first_off": 1139.5
+      },
+      "D": {
+        "second_off": 1252.3,
+        "first_off": 1258.3
+      }
+    },
+    "vietnam": {
+      "O": {
+        "second_off": 1145.3,
+        "first_off": 1143.5
+      },
+      "D": {
+        "second_off": 1250.3,
+        "first_off": 1254.2
+      }
+    },
+    "uae": {
+      "O": {
+        "second_off": 1136.9,
+        "first_off": 1144.4
+      },
+      "D": {
+        "second_off": 1254.7,
+        "first_off": 1253.3
+      }
+    },
+    "saudi_arabia": {
+      "O": {
+        "second_off": 1138.9,
+        "first_off": 1142.2
+      },
+      "D": {
+        "second_off": 1254.1,
+        "first_off": 1258.9
+      }
+    },
+    "peru": {
+      "O": {
+        "second_off": 1142.2,
+        "first_off": 1146.4
+      },
+      "D": {
+        "second_off": 1256.6,
+        "first_off": 1260.8
+      }
+    },
+    "serbia": {
+      "O": {
+        "second_off": 1150.2,
+        "first_off": 1152.3
+      },
+      "D": {
+        "second_off": 1247.0,
+        "first_off": 1249.8
+      }
+    },
+    "morocco": {
+      "O": {
+        "second_off": 1150.6,
+        "first_off": 1144.7
+      },
+      "D": {
+        "second_off": 1248.9,
+        "first_off": 1255.6
+      }
+    },
+    "netherlands": {
+      "O": {
+        "second_off": 1142.5,
+        "first_off": 1144.6
+      },
+      "D": {
+        "second_off": 1255.8,
+        "first_off": 1260.0
       }
     }
   }

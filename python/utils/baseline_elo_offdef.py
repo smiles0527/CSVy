@@ -3,6 +3,7 @@ Baseline Elo Offensive/Defensive Model - Iteration 2.0
 ======================================================
 Separate offensive (O) and defensive (D) Elo ratings per team, per line (line 1 and line 2).
 Updates driven by observed xG vs expected xG. Uses expected wins/losses (xG) not actual goals.
+Ranking and prediction use TOI-weighted line aggregation when shift-level data is available.
 
 2 sets per team: line 1 (O1, D1) and line 2 (O2, D2).
 
@@ -88,6 +89,8 @@ class BaselineEloOffDefModel:
         # Per team, per line: O[team][line] and D[team][line]
         self.O: Dict[str, Dict[str, float]] = {}
         self.D: Dict[str, Dict[str, float]] = {}
+        # TOI-weighted aggregation: team -> {LINE1: w1, LINE2: w2} from empirical TOI shares
+        self.team_toi_weights: Dict[str, Dict[str, float]] = {}
 
     def _add_team_line(self, team: str, line: str) -> None:
         if team not in self.O:
@@ -96,6 +99,13 @@ class BaselineEloOffDefModel:
         if line not in self.O[team]:
             self.O[team][line] = float(self.base_elo)
             self.D[team][line] = float(self.base_elo)
+
+    def _get_line_weights(self, team: str) -> Tuple[float, float]:
+        """Return (w1, w2) for L1 and L2 from TOI shares. Fallback to (0.5, 0.5) if no data."""
+        w = self.team_toi_weights.get(team)
+        if w:
+            return (w.get(LINE1, 0.5), w.get(LINE2, 0.5))
+        return (0.5, 0.5)
 
     def _get_col(self, df: pd.DataFrame, field: str) -> Optional[str]:
         aliases = COLUMN_ALIASES.get(field, [field])
@@ -200,6 +210,32 @@ class BaselineEloOffDefModel:
             total_toi = len(shifts)
         self.league_avg_xg = float(total_xg / max(total_toi / 3600.0, 0.01))
 
+        # Pre-pass: accumulate TOI per (team, line) for weight computation
+        toi_by_team_line: Dict[str, Dict[str, float]] = {}
+        for _, row in shifts.iterrows():
+            ht = str(row[home_col]) if not pd.isna(row[home_col]) else 'Unknown_Home'
+            at = str(row[away_col]) if not pd.isna(row[away_col]) else 'Unknown_Away'
+            if ht == at:
+                continue
+            hl = _parse_line(row[hline_col]) or LINE1
+            al = _parse_line(row[aline_col]) or LINE1
+            td = max(float(row['_toi_delta']), 0)
+            if td <= 0:
+                td = float(row['_toi_raw']) if row['_toi_raw'] > 0 else 0
+            if ht not in toi_by_team_line:
+                toi_by_team_line[ht] = {LINE1: 0.0, LINE2: 0.0}
+            if at not in toi_by_team_line:
+                toi_by_team_line[at] = {LINE1: 0.0, LINE2: 0.0}
+            toi_by_team_line[ht][hl] += td
+            toi_by_team_line[at][al] += td
+        for team, by_line in toi_by_team_line.items():
+            tot = by_line[LINE1] + by_line[LINE2]
+            if tot > 0:
+                self.team_toi_weights[team] = {
+                    LINE1: by_line[LINE1] / tot,
+                    LINE2: by_line[LINE2] / tot,
+                }
+
         for _, row in shifts.iterrows():
             ht = str(row[home_col]) if not pd.isna(row[home_col]) else 'Unknown_Home'
             at = str(row[away_col]) if not pd.isna(row[away_col]) else 'Unknown_Away'
@@ -239,22 +275,26 @@ class BaselineEloOffDefModel:
             self.D[ht][hl] -= delta_a
 
     def _team_net(self, team: str) -> float:
-        """Net strength = average of (O - D) over lines."""
+        """Net strength = TOI-weighted average of (O - D) over lines. Fallback to 0.5/0.5 if no TOI data."""
         if team not in self.O:
             return 0.0
-        vals = [self.O[team].get(l, self.base_elo) - self.D[team].get(l, self.base_elo) for l in VALID_LINES]
-        return sum(vals) / len(vals) if vals else 0.0
+        w1, w2 = self._get_line_weights(team)
+        net_l1 = self.O[team].get(LINE1, self.base_elo) - self.D[team].get(LINE1, self.base_elo)
+        net_l2 = self.O[team].get(LINE2, self.base_elo) - self.D[team].get(LINE2, self.base_elo)
+        return w1 * net_l1 + w2 * net_l2
 
     def predict_goals(self, game) -> Tuple[float, float]:
-        """Return (expected_home_xg, expected_away_xg) using average line ratings."""
+        """Return (expected_home_xg, expected_away_xg) using TOI-weighted line ratings."""
         home_team = get_value(game, 'home_team') or 'Unknown_Home'
         away_team = get_value(game, 'away_team') or 'Unknown_Away'
         self._add_team_line(home_team, LINE1)
         self._add_team_line(away_team, LINE1)
-        O_h = np.mean([self.O.get(home_team, {}).get(l, self.base_elo) for l in VALID_LINES])
-        D_h = np.mean([self.D.get(home_team, {}).get(l, self.base_elo) for l in VALID_LINES])
-        O_a = np.mean([self.O.get(away_team, {}).get(l, self.base_elo) for l in VALID_LINES])
-        D_a = np.mean([self.D.get(away_team, {}).get(l, self.base_elo) for l in VALID_LINES])
+        w_h1, w_h2 = self._get_line_weights(home_team)
+        w_a1, w_a2 = self._get_line_weights(away_team)
+        O_h = w_h1 * self.O.get(home_team, {}).get(LINE1, self.base_elo) + w_h2 * self.O.get(home_team, {}).get(LINE2, self.base_elo)
+        D_h = w_h1 * self.D.get(home_team, {}).get(LINE1, self.base_elo) + w_h2 * self.D.get(home_team, {}).get(LINE2, self.base_elo)
+        O_a = w_a1 * self.O.get(away_team, {}).get(LINE1, self.base_elo) + w_a2 * self.O.get(away_team, {}).get(LINE2, self.base_elo)
+        D_a = w_a1 * self.D.get(away_team, {}).get(LINE1, self.base_elo) + w_a2 * self.D.get(away_team, {}).get(LINE2, self.base_elo)
 
         multi_h = 10.0 ** ((O_h - D_a) / self.elo_scale)
         multi_a = 10.0 ** ((O_a - D_h) / self.elo_scale)
@@ -269,10 +309,12 @@ class BaselineEloOffDefModel:
         away_team = get_value(game, 'away_team') or 'Unknown_Away'
         self._add_team_line(home_team, LINE1)
         self._add_team_line(away_team, LINE1)
-        O_h = np.mean([self.O.get(home_team, {}).get(l, self.base_elo) for l in VALID_LINES])
-        D_h = np.mean([self.D.get(home_team, {}).get(l, self.base_elo) for l in VALID_LINES])
-        O_a = np.mean([self.O.get(away_team, {}).get(l, self.base_elo) for l in VALID_LINES])
-        D_a = np.mean([self.D.get(away_team, {}).get(l, self.base_elo) for l in VALID_LINES])
+        w_h1, w_h2 = self._get_line_weights(home_team)
+        w_a1, w_a2 = self._get_line_weights(away_team)
+        O_h = w_h1 * self.O.get(home_team, {}).get(LINE1, self.base_elo) + w_h2 * self.O.get(home_team, {}).get(LINE2, self.base_elo)
+        D_h = w_h1 * self.D.get(home_team, {}).get(LINE1, self.base_elo) + w_h2 * self.D.get(home_team, {}).get(LINE2, self.base_elo)
+        O_a = w_a1 * self.O.get(away_team, {}).get(LINE1, self.base_elo) + w_a2 * self.O.get(away_team, {}).get(LINE2, self.base_elo)
+        D_a = w_a1 * self.D.get(away_team, {}).get(LINE1, self.base_elo) + w_a2 * self.D.get(away_team, {}).get(LINE2, self.base_elo)
         # Rating diff: home attacking vs away defending minus away attacking vs home defending
         diff = (O_h - D_a) - (O_a - D_h)
         home_win_prob = 1.0 / (1.0 + 10.0 ** (-diff / self.elo_scale))
@@ -336,7 +378,7 @@ class BaselineEloOffDefModel:
         return out
 
     def get_rankings(self, top_n: Optional[int] = None) -> List[Tuple[str, float]]:
-        """Sorted list of (team, net_strength). net_strength = avg(O - D) over lines.
+        """Sorted list of (team, net_strength). net_strength = TOI-weighted avg(O - D) over lines.
         Values can be negative (O and D start at base_elo; league-wide D often > O).
         Higher net = stronger. Used for ranking only; P uses Elo formula on diff."""
         teams = set(self.O.keys()) | set(self.D.keys())
