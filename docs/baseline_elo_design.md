@@ -69,11 +69,11 @@ $$
 Elo yields win probability; we map to goals:
 
 $$
-\text{adj} = g_{half} \cdot (p_{home} - 0.5)
+\mathrm{adj} = g_{\mathrm{half}} \cdot (p_{\mathrm{home}} - 0.5)
 $$
 
 $$
-\text{home\_goals} = \max(0, \mu + \text{adj}), \quad \text{away\_goals} = \max(0, \mu - \text{adj})
+\mathrm{home\_goals} = \max(0, \mu + \mathrm{adj}), \quad \mathrm{away\_goals} = \max(0, \mu - \mathrm{adj})
 $$
 
 - \(\mu\) = `league_avg_goals` (default 3.0)
@@ -91,7 +91,7 @@ $$
 
 ### 3.2 Outcome Encoding
 
-- \(\text{home\_xg} > \text{away\_xg}\) → home wins → \(O_{home} = 1, O_{away} = 0\)
+- home_xg > away_xg → home wins → \(O_{home} = 1, O_{away} = 0\)
 - Otherwise → home loses → \(O_{home} = 0, O_{away} = 1\)
 
 ### 3.3 Expected Score & Rating Update
@@ -103,11 +103,11 @@ Same as 1.0: \(E_a = 1/(1 + 10^{(r_b - r_a)/s})\), \(\Delta_a = k(O_a - E_a)\).
 Same formula as 1.0 goals, but output is *predicted xG*:
 
 $$
-\text{adj} = g_{half} \cdot (p_{home} - 0.5)
+\mathrm{adj} = g_{\mathrm{half}} \cdot (p_{\mathrm{home}} - 0.5)
 $$
 
 $$
-\text{pred\_home\_xg} = \max(0, \mu + \text{adj}), \quad \text{pred\_away\_xg} = \max(0, \mu - \text{adj})
+\mathrm{pred\_home\_xg} = \max(0, \mu + \mathrm{adj}), \quad \mathrm{pred\_away\_xg} = \max(0, \mu - \mathrm{adj})
 $$
 
 - **Evaluation**: RMSE, win accuracy, Brier, log loss — all on xG (not goals).
@@ -127,13 +127,13 @@ $$
 
 - **Shift-level (preferred)**: `home_team`, `away_team`, `home_xg`, `away_xg`, `home_off_line`, `away_off_line`, `toi`, `game_id`.
 - **Lines**: Only `first_off` and `second_off` (L1, L2).
-- **TOI delta**: \(t_\Delta = \text{toi}_{current} - \text{toi}_{previous}\) within each game (assumes cumulative toi or ordered shifts). First row per game: \(t_\Delta = \text{toi}\). If \(t_\Delta \leq 0\), fallback to raw toi.
+- **TOI delta**: \(t_\Delta = \mathrm{toi}_{\mathrm{current}} - \mathrm{toi}_{\mathrm{previous}}\) within each game (assumes cumulative toi or ordered shifts). First row per game: \(t_\Delta = \mathrm{toi}\). If \(t_\Delta \leq 0\), fallback to raw toi.
 - **Game-level fallback**: If no line/TOI columns, treat entire game as line 1.
 
 ### 4.3 League Average xG Rate
 
 $$
-\text{league\_avg\_xg} = \frac{\sum \text{xG}}{\sum t_\Delta / 3600}
+\mathrm{league\_avg\_xg} = \frac{\sum \mathrm{xG}}{\sum t_\Delta / 3600}
 $$
 
 xG per hour (5v5). Used as baseline for expected xG.
@@ -143,15 +143,15 @@ xG per hour (5v5). Used as baseline for expected xG.
 For a matchup: home line \(h\) vs away line \(a\), and away line \(a\) vs home line \(h\):
 
 $$
-\text{multi}_h = 10^{(O_h - D_a) / s}, \quad \text{multi}_a = 10^{(O_a - D_h) / s}
+\mathrm{multi}_h = 10^{(O_h - D_a) / s}, \quad \mathrm{multi}_a = 10^{(O_a - D_h) / s}
 $$
 
 $$
-\text{exp\_home\_xg} = \text{league\_avg\_xg} \cdot \text{multi}_h \cdot \frac{t_\Delta}{3600}
+\mathrm{exp\_home\_xg} = \mathrm{league\_avg\_xg} \cdot \mathrm{multi}_h \cdot \frac{t_\Delta}{3600}
 $$
 
 $$
-\text{exp\_away\_xg} = \text{league\_avg\_xg} \cdot \text{multi}_a \cdot \frac{t_\Delta}{3600}
+\mathrm{exp\_away\_xg} = \mathrm{league\_avg\_xg} \cdot \mathrm{multi}_a \cdot \frac{t_\Delta}{3600}
 $$
 
 - \(t_\Delta\) in seconds; divided by 3600 for hours.
@@ -160,12 +160,14 @@ $$
 ### 4.5 O/D Rating Update
 
 $$
-\delta_h = k \cdot \frac{\text{obs\_home\_xg} - \text{exp\_home\_xg}}{\ln(10)}
+\delta_h = k \cdot \frac{o_h - e_h}{\ln(10)}
 $$
 
 $$
-\delta_a = k \cdot \frac{\text{obs\_away\_xg} - \text{exp\_away\_xg}}{\ln(10)}
+\delta_a = k \cdot \frac{o_a - e_a}{\ln(10)}
 $$
+
+where \(o_h\) = observed home xG, \(e_h\) = expected home xG (and similarly for away).
 
 - \(O_h \mathrel{+}= \delta_h\), \(D_a \mathrel{-}= \delta_h\) (home offense vs away defense)
 - \(O_a \mathrel{+}= \delta_a\), \(D_h \mathrel{-}= \delta_a\) (away offense vs home defense)
@@ -175,12 +177,13 @@ $$
 - **Net (O−D)**: Per team, average of (O−D) over L1 and L2. Can be negative; higher = stronger.
 - **Predict winner**: Uses Elo formula on rating diff:
   \[
-  \text{diff} = (O_h - D_a) - (O_a - D_h)
+  d = (O_h - D_a) - (O_a - D_h)
   \]
   \[
-  P(\text{home wins}) = \frac{1}{1 + 10^{-\text{diff}/s}}
+  P_{\mathrm{home}} = \frac{1}{1 + 10^{-d/s}}
   \]
-- **Predict xG**: Uses average line ratings; expected xG = \(\text{league\_avg\_xg} \cdot \text{multi} \cdot \text{time\_factor}\) (game-level = 1.0 hour equivalent).
+  where \(P_{\mathrm{home}}\) = probability home wins
+- **Predict xG**: Uses average line ratings; expected xG = league_avg_xg × multi × time_factor (game-level = 1.0 hour equivalent).
 
 ### 4.7 Game-Level Fallback
 

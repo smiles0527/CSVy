@@ -10,10 +10,10 @@ Raw shift-level CSV is aggregated to one row per game:
 
 | Aggregation | Formula | Description |
 |-------------|---------|-------------|
-| `home_xg` | \(\sum \text{home\_xg}\) | Sum of home xG over all shifts in the game |
-| `away_xg` | \(\sum \text{away\_xg}\) | Sum of away xG over all shifts in the game |
-| `home_team` | \(\text{first}(\text{home\_team})\) | First (constant) value per game |
-| `away_team` | \(\text{first}(\text{away\_team})\) | First (constant) value per game |
+| `home_xg` | \(\sum\) home_xg | Sum of home xG over all shifts in the game |
+| `away_xg` | \(\sum\) away_xg | Sum of away xG over all shifts in the game |
+| `home_team` | first(home_team) | First (constant) value per game |
+| `away_team` | first(away_team) | First (constant) value per game |
 
 **Code**: `raw.groupby('game_id').agg(home_xg=('home_xg','sum'), away_xg=('away_xg','sum'), ...)`
 
@@ -26,17 +26,17 @@ Games are sorted chronologically by `game_id` / `game_num` for block cross-valid
 For each game, the outcome is binary: did the home team "win" on xG?
 
 \[
-O_{\text{home}} = \begin{cases}
-1 & \text{if } \text{home\_xg} > \text{away\_xg} \\
-0 & \text{otherwise (tie or away wins)}
+O_{\mathrm{home}} = \begin{cases}
+1 & \text{when home wins on xG} \\
+0 & \text{otherwise}
 \end{cases}
 \]
 
 \[
-O_{\text{away}} = 1 - O_{\text{home}}
+O_{\mathrm{away}} = 1 - O_{\mathrm{home}}
 \]
 
-- **Ties** (home_xg = away_xg): Treated as home loss (\(O_{\text{home}} = 0\))
+- **Ties** (home_xg = away_xg): Treated as home loss (\(O_{\mathrm{home}} = 0\))
 - **Overtime**: Not differentiated; OT wins treated same as regulation
 
 ---
@@ -77,7 +77,7 @@ After each match, ratings are updated:
 \]
 
 \[
-r_a^{\text{new}} = r_a + \Delta_a, \quad r_b^{\text{new}} = r_b + \Delta_b
+r_a^{\mathrm{new}} = r_a + \Delta_a, \quad r_b^{\mathrm{new}} = r_b + \Delta_b
 \]
 
 where \(k\) = `k_factor` (grid-searched 5–100, step 5).
@@ -91,26 +91,26 @@ where \(k\) = `k_factor` (grid-searched 5–100, step 5).
 Elo yields win probability, not xG. We map win probability to expected xG:
 
 \[
-\text{adj} = g_{\text{half}} \cdot (p_{\text{home}} - 0.5)
+\mathrm{adj} = g_{\mathrm{half}} \cdot (p_{\mathrm{home}} - 0.5)
 \]
 
 \[
-\text{pred\_home\_xg} = \max(0, \mu + \text{adj})
+\mathrm{pred\_home\_xg} = \max(0, \mu + \mathrm{adj})
 \]
 
 \[
-\text{pred\_away\_xg} = \max(0, \mu - \text{adj})
+\mathrm{pred\_away\_xg} = \max(0, \mu - \mathrm{adj})
 \]
 
 **Parameters**:
 - \(\mu\) = `league_avg_goals` (default 3.0) — baseline xG per team
-- \(g_{\text{half}}\) = `goal_diff_half_range` (default 6.0) — xG spread per unit of win prob above 0.5
-- \(p_{\text{home}}\) = home win probability from Elo
+- \(g_{\mathrm{half}}\) = `goal_diff_half_range` (default 6.0) — xG spread per unit of win prob above 0.5
+- \(p_{\mathrm{home}}\) = home win probability from Elo
 
 **Examples**:
-- \(p_{\text{home}} = 0.5\) → 3.0–3.0
-- \(p_{\text{home}} = 1\) → 9.0–0.0
-- \(p_{\text{home}} = 0\) → 0.0–9.0
+- \(p_{\mathrm{home}} = 0.5\) → 3.0–3.0
+- \(p_{\mathrm{home}} = 1\) → 9.0–0.0
+- \(p_{\mathrm{home}} = 0\) → 0.0–9.0
 
 ---
 
@@ -119,11 +119,11 @@ Elo yields win probability, not xG. We map win probability to expected xG:
 ### 6.1 RMSE (Root Mean Squared Error)
 
 \[
-\text{RMSE}_{\text{home}} = \sqrt{\frac{1}{n}\sum_{i=1}^{n} (y_i^{\text{pred}} - y_i^{\text{actual}})^2}
+\mathrm{RMSE}_{\mathrm{home}} = \sqrt{\frac{1}{n}\sum_{i=1}^{n} (y_i^{\mathrm{pred}} - y_i^{\mathrm{actual}})^2}
 \]
 
 \[
-\text{RMSE}_{\text{combined}} = \sqrt{\frac{1}{2n}\sum_{i=1}^{n} \left[ (h_i^{\text{pred}} - h_i^{\text{actual}})^2 + (a_i^{\text{pred}} - a_i^{\text{actual}})^2 \right]}
+\mathrm{RMSE}_{\mathrm{combined}} = \sqrt{\frac{1}{2n}\sum_{i=1}^{n} \left[ (h_i^{\mathrm{pred}} - h_i^{\mathrm{actual}})^2 + (a_i^{\mathrm{pred}} - a_i^{\mathrm{actual}})^2 \right]}
 \]
 
 where \(h\) = home xG, \(a\) = away xG.
@@ -131,7 +131,7 @@ where \(h\) = home xG, \(a\) = away xG.
 ### 6.2 MAE (Mean Absolute Error)
 
 \[
-\text{MAE} = \frac{1}{n}\sum_{i=1}^{n} |y_i^{\text{pred}} - y_i^{\text{actual}}|
+\mathrm{MAE} = \frac{1}{n}\sum_{i=1}^{n} |y_i^{\mathrm{pred}} - y_i^{\mathrm{actual}}|
 \]
 
 ### 6.3 R² (Coefficient of Determination)
@@ -145,7 +145,7 @@ If all actual values are identical, \(R^2 = 0\) (avoids division issues).
 ### 6.4 Win Accuracy
 
 \[
-\text{Win Accuracy} = \frac{\text{\# games where pred winner matches actual winner}}{n}
+\mathrm{Win\ Accuracy} = \frac{\text{\# correct predictions}}{n}
 \]
 
 Actual winner = team with higher xG. Predicted winner = team with higher predicted xG.
@@ -158,23 +158,23 @@ For each game, let:
 - \(O_B = 1 - O_A\)
 
 \[
-\text{Brier}_{\text{game}} = (E_A - O_A)^2
+\mathrm{Brier}_{\mathrm{game}} = (E_A - O_A)^2
 \]
 
 \[
-\text{Brier Loss} = \frac{1}{n}\sum_{\text{games}} (E_A - O_A)^2
+\mathrm{Brier\ Loss} = \frac{1}{n}\sum (E_A - O_A)^2
 \]
 
 ### 6.6 Log Loss (Cross-Entropy)
 
 \[
-\text{LogLoss}_{\text{game}} = -\left[ O_A \log(E_A) + O_B \log(E_B) \right]
+\mathrm{LogLoss}_{\mathrm{game}} = -\left[ O_A \log(E_A) + O_B \log(E_B) \right]
 \]
 
 where \(E_A, E_B\) are clipped to \([\epsilon, 1-\epsilon]\) (e.g. \(\epsilon = 10^{-10}\)) to avoid \(\log(0)\).
 
 \[
-\text{Log Loss} = \frac{1}{n}\sum_{\text{games}} \text{LogLoss}_{\text{game}}
+\mathrm{Log\ Loss} = \frac{1}{n}\sum \mathrm{LogLoss}_{\mathrm{game}}
 \]
 
 ---
@@ -187,7 +187,7 @@ where \(E_A, E_B\) are clipped to \([\epsilon, 1-\epsilon]\) (e.g. \(\epsilon = 
 | `initial_rating` | \(r_0\) | 1200 | Starting rating for new teams | Yes (fixed 1200) |
 | `elo_scale` | \(s\) | 400 | Divisor in expected-score formula | No |
 | `league_avg_goals` | \(\mu\) | 3.0 | Baseline xG per team | No |
-| `goal_diff_half_range` | \(g_{\text{half}}\) | 6.0 | Win-prob → xG spread | No |
+| `goal_diff_half_range` | \(g_{\mathrm{half}}\) | 6.0 | Win-prob → xG spread | No |
 
 ---
 
