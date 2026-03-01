@@ -43,8 +43,8 @@ A design specification for the Baseline Elo family: **1.0 (Goals)**, **1.1 (xG)*
 
 ### 2.2 Outcome Encoding
 
-- \(hg > ag\) → home wins → \(O_{\mathrm{home}} = 1,\ O_{\mathrm{away}} = 0\)
-- \(hg \leq ag\) (including ties) → home loses → \(O_{\mathrm{home}} = 0,\ O_{\mathrm{away}} = 1\)
+- \(hg > ag\) → home wins → \(O_{\mathrm{home}} = 1\), \(O_{\mathrm{away}} = 0\)
+- \(hg \leq ag\) (including ties) → home loses → \(O_{\mathrm{home}} = 0\), \(O_{\mathrm{away}} = 1\)
 
 ### 2.3 Expected Score (Win Probability)
 
@@ -73,7 +73,7 @@ $$
 $$
 
 $$
-\mathrm{home\_goals} = \max(0, \mu + \mathrm{adj}), \quad \mathrm{away\_goals} = \max(0, \mu - \mathrm{adj})
+\mathrm{homeGoals} = \max(0, \mu + \mathrm{adj}), \quad \mathrm{awayGoals} = \max(0, \mu - \mathrm{adj})
 $$
 
 - \(\mu\) = `league_avg_goals` (default 3.0)
@@ -91,8 +91,8 @@ $$
 
 ### 3.2 Outcome Encoding
 
-- home_xg > away_xg → home wins → \(O_{\mathrm{home}} = 1,\ O_{\mathrm{away}} = 0\)
-- Otherwise → home loses → \(O_{\mathrm{home}} = 0,\ O_{\mathrm{away}} = 1\)
+- home_xg > away_xg → home wins → \(O_{\mathrm{home}} = 1\), \(O_{\mathrm{away}} = 0\)
+- Otherwise → home loses → \(O_{\mathrm{home}} = 0\), \(O_{\mathrm{away}} = 1\)
 
 ### 3.3 Expected Score & Rating Update
 
@@ -107,7 +107,7 @@ $$
 $$
 
 $$
-\mathrm{pred\_home\_xg} = \max(0, \mu + \mathrm{adj}), \quad \mathrm{pred\_away\_xg} = \max(0, \mu - \mathrm{adj})
+\mathrm{predHomeXg} = \max(0, \mu + \mathrm{adj}), \quad \mathrm{predAwayXg} = \max(0, \mu - \mathrm{adj})
 $$
 
 - **Evaluation**: RMSE, win accuracy, Brier, log loss — all on xG (not goals).
@@ -133,7 +133,7 @@ $$
 ### 4.3 League Average xG Rate
 
 $$
-\mathrm{league\_avg\_xg} = \frac{\sum \mathrm{xG}}{\sum t_{\Delta} / 3600}
+\mathrm{leagueAvgXg} = \frac{\sum \mathrm{xG}}{(\sum t_{\Delta}) / 3600}
 $$
 
 xG per hour (5v5). Used as baseline for expected xG.
@@ -147,11 +147,11 @@ $$
 $$
 
 $$
-\mathrm{exp\_home\_xg} = \mathrm{league\_avg\_xg} \cdot \mathrm{multi}_{h} \cdot \frac{t_{\Delta}}{3600}
+\mathrm{expHomeXg} = \mathrm{leagueAvgXg} \cdot \mathrm{multi}_{h} \cdot \frac{t_{\Delta}}{3600}
 $$
 
 $$
-\mathrm{exp\_away\_xg} = \mathrm{league\_avg\_xg} \cdot \mathrm{multi}_{a} \cdot \frac{t_{\Delta}}{3600}
+\mathrm{expAwayXg} = \mathrm{leagueAvgXg} \cdot \mathrm{multi}_{a} \cdot \frac{t_{\Delta}}{3600}
 $$
 
 - \(t_{\Delta}\) in seconds; divided by 3600 for hours.
@@ -169,8 +169,8 @@ $$
 
 where \(o_{h}\) = observed home xG, \(e_{h}\) = expected home xG (and similarly for away).
 
-- \(O_{h} \mathrel{+}= \delta_{h}\), \(D_{a} \mathrel{-}= \delta_{h}\) (home offense vs away defense)
-- \(O_{a} \mathrel{+}= \delta_{a}\), \(D_{h} \mathrel{-}= \delta_{a}\) (away offense vs home defense)
+- \(O_{h} \leftarrow O_{h} + \delta_{h}\), \(D_{a} \leftarrow D_{a} - \delta_{h}\) (home offense vs away defense)
+- \(O_{a} \leftarrow O_{a} + \delta_{a}\), \(D_{h} \leftarrow D_{h} - \delta_{a}\) (away offense vs home defense)
 
 ### 4.6 Net Rating & Win Probability
 
