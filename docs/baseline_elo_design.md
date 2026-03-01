@@ -1,6 +1,6 @@
-# Baseline Elo Model — Design Document
+# Baseline Elo Models — Design Document
 
-A thorough design specification for the minimal Elo rating system used as a hockey prediction baseline.
+A design specification for the Baseline Elo family: **1.0 (Goals)**, **1.1 (xG)**, and **2.0 (Off/Def)**. All share minimalism (no home advantage, MOV, rest, etc.) and a common API.
 
 ---
 
@@ -8,26 +8,45 @@ A thorough design specification for the minimal Elo rating system used as a hock
 
 ### 1.1 Goals
 
-- **Benchmark**: Provide a simple, interpretable baseline for comparing more complex models (full Elo, XGBoost, ensemble).
+- **Benchmark**: Simple, interpretable baselines for comparing complex models.
 - **Minimalism**: No home advantage, margin-of-victory, rest, travel, or overtime differentiation.
-- **Interface compatibility**: Same `fit` / `predict_goals` / `predict_winner` / `evaluate` API as other models for fair comparison.
+- **Interface compatibility**: Same `fit` / `predict_goals` / `predict_winner` / `evaluate` API across iterations.
 
-### 1.2 Out of Scope (intentionally)
+### 1.2 Iteration Overview
 
-| Feature | Status | Rationale |
-|--------|--------|-----------|
-| Home ice advantage | Not included | Simplification; full Elo has it |
-| Margin of victory (MOV) | Not included | Classic Elo is win/loss only |
-| Overtime vs regulation | Not differentiated | Treated as binary win/loss |
-| Rest, travel, injuries | Not included | No contextual features |
-| Season carryover | N/A | Single-season model |
-| Division/tier seeding | Not included | All teams start equal |
+| Iteration | Outcome | Data | Rating |
+|-----------|---------|------|--------|
+| **1.0** | Actual goals | Game-level | Single rating per team |
+| **1.1** | Expected goals (xG) | Game-level | Single rating per team |
+| **2.0** | xG per shift | Shift-level | O and D per team, per line (L1/L2) |
+
+### 1.3 Out of Scope (intentionally)
+
+| Feature | Status |
+|---------|--------|
+| Home ice advantage | Not included |
+| Margin of victory | Not included |
+| Overtime differentiation | Treated as binary win/loss |
+| Rest, travel, injuries | Not included |
+| Season carryover | Single-season only |
+| Division/tier seeding | All teams start equal |
 
 ---
 
-## 2. Mathematical Formulation
+## 2. Iteration 1.0 — Goals
 
-### 2.1 Expected Score (Win Probability)
+### 2.1 Data
+
+- **Input**: Game-level DataFrame with `home_team`, `away_team`, `home_goals`, `away_goals`.
+- **Shift-level CSV** → aggregated by `game_id` (sum goals, first home/away).
+- **Order**: Chronological by `game_id` / `game_num`.
+
+### 2.2 Outcome Encoding
+
+- \(hg > ag\) → home wins → \(O_{home} = 1, O_{away} = 0\)
+- \(hg \leq ag\) (including ties) → home loses → \(O_{home} = 0, O_{away} = 1\)
+
+### 2.3 Expected Score (Win Probability)
 
 For team A (rating \(r_a\)) vs team B (rating \(r_b\)):
 
@@ -35,144 +54,201 @@ $$
 E_a = \frac{1}{1 + 10^{(r_b - r_a) / s}}
 $$
 
-with \(s = 400\) (configurable `elo_scale`).
+with \(s\) = `elo_scale` (default 400). \(E_a + E_b = 1\).
 
-- \(E_a + E_b = 1\)
-- 200-point gap ≈ 76% for stronger team
-- 400-point gap ≈ 91%
-
-**Example**: Rating diff +100 → E(stronger) ≈ 64%; +200 → 76%; +400 → 91%.
-
-### 2.2 Rating Update (Zero-Sum)
-
-After each match:
+### 2.4 Rating Update (Zero-Sum)
 
 $$
-\Delta_a = k \cdot (O_a - E_a)
+\Delta_a = k \cdot (O_a - E_a), \quad \Delta_b = k \cdot (O_b - E_b)
 $$
 
-$$
-\Delta_b = k \cdot (O_b - E_b)
-$$
+\(O_a, O_b \in \{0, 1\}\), \(O_a + O_b = 1\). \(\Delta_a + \Delta_b = 0\).
 
-where \(O_a, O_b \in \{0, 1\}\) with \(O_a + O_b = 1\) (binary win/loss).
+### 2.5 Goal Prediction (Derived)
 
-**Conservation**: \(\Delta_a + \Delta_b = k(O_a + O_b - E_a - E_b) = k(1 - 1) = 0\). One team gains exactly what the other loses.
-
-### 2.3 Goal Prediction (Derived)
-
-Elo yields win probability, not goals. We map win prob to goals:
+Elo yields win probability; we map to goals:
 
 $$
 \text{adj} = g_{half} \cdot (p_{home} - 0.5)
 $$
 
 $$
-\text{home\_goals} = \max(0, \mu + \text{adj})
-$$
-
-$$
-\text{away\_goals} = \max(0, \mu - \text{adj})
+\text{home\_goals} = \max(0, \mu + \text{adj}), \quad \text{away\_goals} = \max(0, \mu - \text{adj})
 $$
 
 - \(\mu\) = `league_avg_goals` (default 3.0)
 - \(g_{half}\) = `goal_diff_half_range` (default 6)
-- \(p_{home}\) = 0.5 gives 3–3; \(p_{home} = 1\) gives 9–0; \(p_{home} = 0\) gives 0–9
-- \(\max(0, \cdot)\) prevents negative goals
 
 ---
 
-## 3. Parameters
+## 3. Iteration 1.1 — xG
 
-| Param | Default | Role | Grid? |
-|-------|---------|------|-------|
-| `k_factor` | 32 | Rating volatility per game | Yes (5–100) |
-| `initial_rating` | 1200 | Starting rating for new teams | Yes (fixed 1200) |
-| `elo_scale` | 400 | Divisor in expected-score | No |
-| `league_avg_goals` | 3.0 | Baseline for goal prediction | No |
-| `goal_diff_half_range` | 6.0 | Win-prob → goal spread | No |
+### 3.1 Data
+
+- **Input**: Game-level with `home_team`, `away_team`, `home_xg`, `away_xg`.
+- **Aggregation**: Shift-level → sum `home_xg`, `away_xg` per game.
+- **Order**: Chronological.
+
+### 3.2 Outcome Encoding
+
+- \(\text{home\_xg} > \text{away\_xg}\) → home wins → \(O_{home} = 1, O_{away} = 0\)
+- Otherwise → home loses → \(O_{home} = 0, O_{away} = 1\)
+
+### 3.3 Expected Score & Rating Update
+
+Same as 1.0: \(E_a = 1/(1 + 10^{(r_b - r_a)/s})\), \(\Delta_a = k(O_a - E_a)\).
+
+### 3.4 xG Prediction (Derived)
+
+Same formula as 1.0 goals, but output is *predicted xG*:
+
+$$
+\text{adj} = g_{half} \cdot (p_{home} - 0.5)
+$$
+
+$$
+\text{pred\_home\_xg} = \max(0, \mu + \text{adj}), \quad \text{pred\_away\_xg} = \max(0, \mu - \text{adj})
+$$
+
+- **Evaluation**: RMSE, win accuracy, Brier, log loss — all on xG (not goals).
 
 ---
 
-## 4. Data Flow
+## 4. Iteration 2.0 — Off/Def
 
-### 4.1 Input
+### 4.1 Concept
 
-- **Shift-level CSV** → aggregated to game level (sum goals, first home/away).
-- **Required columns** (or aliases): `home_team`, `away_team`, `home_goals`, `away_goals`.
-- **Order**: Games processed chronologically (by `game_id` / `game_num`).
+- **Separate O and D** ratings per team, per line (L1 = first_off, L2 = second_off).
+- **Updates** driven by observed xG vs expected xG (not win/loss binary).
+- **Time-aware**: Uses TOI delta (change in time) per shift for expected xG scaling.
+- **xG rate**: League baseline = xG per hour from training data.
 
-### 4.2 Outcome Encoding
+### 4.2 Data
 
-- \(hg > ag\) → home wins → \(O_{home} = 1, O_{away} = 0\)
-- \(hg \leq ag\) (includes ties) → home loses → \(O_{home} = 0, O_{away} = 1\)
-- Overtime wins treated identically to regulation wins.
+- **Shift-level (preferred)**: `home_team`, `away_team`, `home_xg`, `away_xg`, `home_off_line`, `away_off_line`, `toi`, `game_id`.
+- **Lines**: Only `first_off` and `second_off` (L1, L2).
+- **TOI delta**: \(t_\Delta = \text{toi}_{current} - \text{toi}_{previous}\) within each game (assumes cumulative toi or ordered shifts). First row per game: \(t_\Delta = \text{toi}\). If \(t_\Delta \leq 0\), fallback to raw toi.
+- **Game-level fallback**: If no line/TOI columns, treat entire game as line 1.
 
-### 4.3 Outputs
+### 4.3 League Average xG Rate
 
-- **Rankings**: `(team, rating)` sorted descending.
-- **predict_winner**: `(team, confidence)` where confidence = win probability.
-- **predict_goals**: `(home_goals, away_goals)` — derived from win prob.
+$$
+\text{league\_avg\_xg} = \frac{\sum \text{xG}}{\sum t_\Delta / 3600}
+$$
+
+xG per hour (5v5). Used as baseline for expected xG.
+
+### 4.4 Expected xG (Per Shift)
+
+For a matchup: home line \(h\) vs away line \(a\), and away line \(a\) vs home line \(h\):
+
+$$
+\text{multi}_h = 10^{(O_h - D_a) / s}, \quad \text{multi}_a = 10^{(O_a - D_h) / s}
+$$
+
+$$
+\text{exp\_home\_xg} = \text{league\_avg\_xg} \cdot \text{multi}_h \cdot \frac{t_\Delta}{3600}
+$$
+
+$$
+\text{exp\_away\_xg} = \text{league\_avg\_xg} \cdot \text{multi}_a \cdot \frac{t_\Delta}{3600}
+$$
+
+- \(t_\Delta\) in seconds; divided by 3600 for hours.
+- Minimum \(t_\Delta/3600 = 0.001\) to avoid zero.
+
+### 4.5 O/D Rating Update
+
+$$
+\delta_h = k \cdot \frac{\text{obs\_home\_xg} - \text{exp\_home\_xg}}{\ln(10)}
+$$
+
+$$
+\delta_a = k \cdot \frac{\text{obs\_away\_xg} - \text{exp\_away\_xg}}{\ln(10)}
+$$
+
+- \(O_h \mathrel{+}= \delta_h\), \(D_a \mathrel{-}= \delta_h\) (home offense vs away defense)
+- \(O_a \mathrel{+}= \delta_a\), \(D_h \mathrel{-}= \delta_a\) (away offense vs home defense)
+
+### 4.6 Net Rating & Win Probability
+
+- **Net (O−D)**: Per team, average of (O−D) over L1 and L2. Can be negative; higher = stronger.
+- **Predict winner**: Uses Elo formula on rating diff:
+  \[
+  \text{diff} = (O_h - D_a) - (O_a - D_h)
+  \]
+  \[
+  P(\text{home wins}) = \frac{1}{1 + 10^{-\text{diff}/s}}
+  \]
+- **Predict xG**: Uses average line ratings; expected xG = \(\text{league\_avg\_xg} \cdot \text{multi} \cdot \text{time\_factor}\) (game-level = 1.0 hour equivalent).
+
+### 4.7 Game-Level Fallback
+
+When no shift/line data: one O and D per team (line 1 only). `league_avg_xg` = total xG / (2 × n_games). `time_factor` = 1.0 (one game unit).
+
+---
+
+## 5. Shared Parameters
+
+| Param | Default | 1.0 | 1.1 | 2.0 | Role |
+|-------|---------|-----|-----|-----|------|
+| `k_factor` | 32 | ✓ | ✓ | ✓ | Rating change magnitude (swept 0.1–100 for 2.0) |
+| `initial_rating` | 1200 | ✓ | ✓ | ✓ | Starting O, D per team/line |
+| `elo_scale` | 400 | ✓ | ✓ | ✓ | Divisor in win-prob formula |
+| `league_avg_goals` | 3.0 | ✓ | ✓ | — | Baseline for goal/xG prediction (1.0, 1.1) |
+| `goal_diff_half_range` | 6.0 | ✓ | ✓ | — | Win-prob → goal spread |
+| `league_avg_xg` | (computed) | — | — | ✓ | xG per hour from data |
+| `time_factor` | 1.0 | — | — | ✓ | Game-level xG time scaling |
+
+---
+
+## 6. Data Flow Summary
+
+| Iteration | Input | Outcome | Output |
+|-----------|-------|---------|--------|
+| 1.0 | Games: goals | \(O \in \{0,1\}\) from goals | Rankings, predict_goals, predict_winner |
+| 1.1 | Games: xG | \(O \in \{0,1\}\) from xG | Rankings, predict_goals (xG), predict_winner |
+| 2.0 | Shifts: xG, line, TOI | obs vs exp xG per shift | O/D per line, predict_goals (xG), predict_winner |
+
+---
+
+## 7. Edge Cases & Robustness
+
+| Case | 1.0 / 1.1 | 2.0 |
+|------|-----------|-----|
+| Ties | Treated as home loss | N/A (continuous xG) |
+| Self-play | Row skipped | Row skipped |
+| NaN team names | Coerced to Unknown | Coerced to Unknown |
+| Unknown team at predict | Uses initial_rating | Uses initial_rating |
+| No line/TOI columns | N/A | Game-level fallback |
+| \(t_\Delta \leq 0\) | N/A | Fallback to raw toi |
+| Empty DataFrame | Zero metrics | Zero metrics |
+
+---
+
+## 8. Validation & Evaluation
+
+- **Train/test**: Configurable split (e.g. 70/30 block CV, 3 folds).
+- **K-sweep**: `k_factor` grid (e.g. 0.1–100 step 0.1 for 2.0).
+- **Selection**: Best by `combined_rmse` or by accuracy.
 - **Metrics**: RMSE, MAE, R², win_accuracy, Brier loss, log loss.
 
 ---
 
-## 5. Edge Cases & Robustness
+## 9. Implementation References
 
-| Case | Handling |
-|------|----------|
-| Ties (\(hg = ag\)) | Treated as home loss (\(O=0\)) |
-| Self-play (home=away) | Row skipped |
-| NaN team names | Coerced to `Unknown_Home` / `Unknown_Away` |
-| NaN goals | Treated as 0 |
-| Unknown team at predict | Uses `initial_rating` |
-| \(elo\_scale \leq 0\) | Fallback: expected score = 0.5 |
-| Negative goal prediction | Clipped to 0 |
-| Empty DataFrame (evaluate) | Returns zero metrics, no crash |
+| Iteration | Module | Config |
+|-----------|--------|--------|
+| 1.0 | `python/utils/baseline_elo.py` | `model_baseline_elo.yaml` |
+| 1.1 | `python/utils/baseline_elo_xg.py` | `model_baseline_elo_xg.yaml` |
+| 2.0 | `python/utils/baseline_elo_offdef.py` | `model_baseline_elo_sweep.yaml` |
 
----
-
-## 6. Validation & Evaluation
-
-- **Train/test**: Configurable split (default 70/30 block CV, 3 folds).
-- **Grid search**: Over `k_factor` (and optionally `initial_rating`).
-- **Selection**: Best by `combined_rmse` on first fold.
-- **Metrics**: RMSE (goals), win accuracy, Brier loss, log loss.
-
----
-
-## 7. Implementation Notes
-
-- **Core**: `EloSystem` dataclass (rating logic) + `BaselineEloModel` (DataFrame API).
-- **Config**: YAML (`config/hyperparams/model_baseline_elo.yaml`) for all hyperparameters and paths.
-- **Pipeline**: `_run_baseline_elo.py` (CLI) and `train_baseline_elo.ipynb` (interactive).
-
----
-
-## 8. Comparison to Full Elo Model
-
-| Aspect | Baseline Elo | Full Elo (model3) |
-|--------|--------------|-------------------|
-| Home advantage | None | Yes (configurable) |
-| MOV | None | Yes (linear/log) |
-| Overtime | Same as regulation | Discounted (e.g. 0.75) |
-| Rest / travel | None | Yes |
-| Division seeding | None | D1/D2/D3 |
-| Params | 5 | 10+ |
-
----
-
-## 9. Possible Extensions
-
-- **OT multiplier**: Add `ot_win_multiplier` and use `went_ot` from data.
-- **Home advantage**: Fixed rating boost for home team.
-- **MOV**: Scale K by goal differential (would break strict zero-sum per match if not careful).
+**Unified sweep**: `python/_run_baseline_elo_sweep.py` — runs 1.0, 1.1, 2.0 or `--2.0-only`.
 
 ---
 
 ## 10. References
 
 - Elo, A. (1978). *The Rating of Chessplayers, Past and Present*.
-- FIFA/CONCACAF-style Elo for football.
-- `config/hyperparams/model_baseline_elo.yaml` — runtime config.
-- `python/utils/baseline_elo.py` — implementation.
+- `python/MODEL_VALUES_INDEX.md` — value reference across models.
+- `docs/baseline_elo_xg_calculations.md` — detailed 1.1 formulas.
