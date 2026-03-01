@@ -273,324 +273,324 @@
     "league_avg_xg_per_hour_5v5": 14.0885
   },
   "line_ratings": {
-    "oman": {
-      "O": {
-        "first_off": 1095.9,
-        "second_off": 1091.8
-      },
-      "D": {
-        "first_off": 1334.5,
-        "second_off": 1298.5
-      }
-    },
-    "pakistan": {
-      "O": {
-        "first_off": 1128.3,
-        "second_off": 1102.2
-      },
-      "D": {
-        "first_off": 1338.2,
-        "second_off": 1344.2
-      }
-    },
-    "mexico": {
-      "O": {
-        "first_off": 1110.0,
-        "second_off": 1081.9
-      },
-      "D": {
-        "first_off": 1360.7,
-        "second_off": 1336.2
-      }
-    },
-    "thailand": {
-      "O": {
-        "first_off": 1121.2,
-        "second_off": 1105.1
-      },
-      "D": {
-        "first_off": 1322.4,
-        "second_off": 1366.7
-      }
-    },
-    "singapore": {
-      "O": {
-        "first_off": 1092.4,
-        "second_off": 1057.0
-      },
-      "D": {
-        "first_off": 1300.0,
-        "second_off": 1316.8
-      }
-    },
-    "indonesia": {
-      "O": {
-        "first_off": 1039.7,
-        "second_off": 1057.1
-      },
-      "D": {
-        "first_off": 1344.7,
-        "second_off": 1279.6
-      }
-    },
-    "brazil": {
-      "O": {
-        "first_off": 1111.9,
-        "second_off": 1098.0
-      },
-      "D": {
-        "first_off": 1382.7,
-        "second_off": 1328.0
-      }
-    },
-    "south_korea": {
-      "O": {
-        "first_off": 1105.7,
-        "second_off": 1085.8
-      },
-      "D": {
-        "first_off": 1361.3,
-        "second_off": 1315.9
-      }
-    },
-    "philippines": {
-      "O": {
-        "first_off": 1053.6,
-        "second_off": 1038.0
-      },
-      "D": {
-        "first_off": 1324.7,
-        "second_off": 1317.6
-      }
-    },
-    "usa": {
-      "O": {
-        "first_off": 1118.4,
-        "second_off": 1054.4
-      },
-      "D": {
-        "first_off": 1302.9,
-        "second_off": 1301.3
-      }
-    },
-    "france": {
-      "O": {
-        "first_off": 1085.4,
-        "second_off": 1045.5
-      },
-      "D": {
-        "first_off": 1336.2,
-        "second_off": 1295.5
-      }
-    },
-    "germany": {
-      "O": {
-        "first_off": 1072.3,
-        "second_off": 1073.5
-      },
-      "D": {
-        "first_off": 1306.8,
-        "second_off": 1317.5
-      }
-    },
-    "serbia": {
-      "O": {
-        "first_off": 1104.7,
-        "second_off": 1091.7
-      },
-      "D": {
-        "first_off": 1306.8,
-        "second_off": 1299.8
-      }
-    },
-    "kazakhstan": {
-      "O": {
-        "first_off": 1017.5,
-        "second_off": 1033.4
-      },
-      "D": {
-        "first_off": 1348.2,
-        "second_off": 1298.4
-      }
-    },
-    "guatemala": {
-      "O": {
-        "first_off": 1119.9,
-        "second_off": 1071.5
-      },
-      "D": {
-        "first_off": 1321.8,
-        "second_off": 1339.9
-      }
-    },
     "rwanda": {
       "O": {
-        "first_off": 1076.9,
-        "second_off": 1060.5
+        "second_off": 1060.5,
+        "first_off": 1076.9
       },
       "D": {
-        "first_off": 1336.6,
-        "second_off": 1327.9
-      }
-    },
-    "mongolia": {
-      "O": {
-        "first_off": 1028.9,
-        "second_off": 1018.4
-      },
-      "D": {
-        "first_off": 1322.6,
-        "second_off": 1291.6
-      }
-    },
-    "ethiopia": {
-      "O": {
-        "first_off": 1062.8,
-        "second_off": 1080.7
-      },
-      "D": {
-        "first_off": 1319.9,
-        "second_off": 1339.8
-      }
-    },
-    "panama": {
-      "O": {
-        "first_off": 1101.5,
-        "second_off": 1070.7
-      },
-      "D": {
-        "first_off": 1339.4,
-        "second_off": 1310.4
-      }
-    },
-    "peru": {
-      "O": {
-        "first_off": 1086.7,
-        "second_off": 1056.1
-      },
-      "D": {
-        "first_off": 1372.9,
-        "second_off": 1334.4
-      }
-    },
-    "saudi_arabia": {
-      "O": {
-        "first_off": 1065.5,
-        "second_off": 1030.4
-      },
-      "D": {
-        "first_off": 1338.3,
-        "second_off": 1311.6
-      }
-    },
-    "iceland": {
-      "O": {
-        "first_off": 1079.8,
-        "second_off": 1034.2
-      },
-      "D": {
-        "first_off": 1333.3,
-        "second_off": 1326.6
+        "second_off": 1327.9,
+        "first_off": 1336.6
       }
     },
     "vietnam": {
       "O": {
-        "first_off": 1059.5,
-        "second_off": 1069.6
+        "second_off": 1069.6,
+        "first_off": 1059.5
       },
       "D": {
-        "first_off": 1328.5,
-        "second_off": 1302.4
+        "second_off": 1302.4,
+        "first_off": 1328.5
       }
     },
-    "switzerland": {
+    "pakistan": {
       "O": {
-        "first_off": 1018.8,
-        "second_off": 1048.5
+        "second_off": 1102.2,
+        "first_off": 1128.3
       },
       "D": {
-        "first_off": 1360.6,
-        "second_off": 1314.2
-      }
-    },
-    "uae": {
-      "O": {
-        "first_off": 1057.1,
-        "second_off": 1014.2
-      },
-      "D": {
-        "first_off": 1308.3,
-        "second_off": 1319.9
-      }
-    },
-    "india": {
-      "O": {
-        "first_off": 1087.1,
-        "second_off": 1072.2
-      },
-      "D": {
-        "first_off": 1333.8,
-        "second_off": 1314.4
-      }
-    },
-    "new_zealand": {
-      "O": {
-        "first_off": 1095.3,
-        "second_off": 1053.3
-      },
-      "D": {
-        "first_off": 1357.9,
-        "second_off": 1314.1
-      }
-    },
-    "china": {
-      "O": {
-        "first_off": 1100.2,
-        "second_off": 1093.0
-      },
-      "D": {
-        "first_off": 1336.2,
-        "second_off": 1332.8
-      }
-    },
-    "uk": {
-      "O": {
-        "first_off": 1123.5,
-        "second_off": 1068.9
-      },
-      "D": {
-        "first_off": 1325.9,
-        "second_off": 1300.4
+        "second_off": 1344.2,
+        "first_off": 1338.2
       }
     },
     "canada": {
       "O": {
-        "first_off": 1091.0,
-        "second_off": 1072.3
+        "second_off": 1072.3,
+        "first_off": 1091.0
       },
       "D": {
-        "first_off": 1354.7,
-        "second_off": 1297.4
+        "second_off": 1297.4,
+        "first_off": 1354.7
+      }
+    },
+    "south_korea": {
+      "O": {
+        "second_off": 1085.8,
+        "first_off": 1105.7
+      },
+      "D": {
+        "second_off": 1315.9,
+        "first_off": 1361.3
+      }
+    },
+    "iceland": {
+      "O": {
+        "second_off": 1034.2,
+        "first_off": 1079.8
+      },
+      "D": {
+        "second_off": 1326.6,
+        "first_off": 1333.3
+      }
+    },
+    "ethiopia": {
+      "O": {
+        "second_off": 1080.7,
+        "first_off": 1062.8
+      },
+      "D": {
+        "second_off": 1339.8,
+        "first_off": 1319.9
+      }
+    },
+    "uae": {
+      "O": {
+        "second_off": 1014.2,
+        "first_off": 1057.1
+      },
+      "D": {
+        "second_off": 1319.9,
+        "first_off": 1308.3
+      }
+    },
+    "new_zealand": {
+      "O": {
+        "second_off": 1053.3,
+        "first_off": 1095.3
+      },
+      "D": {
+        "second_off": 1314.1,
+        "first_off": 1357.9
+      }
+    },
+    "panama": {
+      "O": {
+        "second_off": 1070.7,
+        "first_off": 1101.5
+      },
+      "D": {
+        "second_off": 1310.4,
+        "first_off": 1339.4
+      }
+    },
+    "philippines": {
+      "O": {
+        "second_off": 1038.0,
+        "first_off": 1053.6
+      },
+      "D": {
+        "second_off": 1317.6,
+        "first_off": 1324.7
+      }
+    },
+    "peru": {
+      "O": {
+        "second_off": 1056.1,
+        "first_off": 1086.7
+      },
+      "D": {
+        "second_off": 1334.4,
+        "first_off": 1372.9
+      }
+    },
+    "china": {
+      "O": {
+        "second_off": 1093.0,
+        "first_off": 1100.2
+      },
+      "D": {
+        "second_off": 1332.8,
+        "first_off": 1336.2
+      }
+    },
+    "singapore": {
+      "O": {
+        "second_off": 1057.0,
+        "first_off": 1092.4
+      },
+      "D": {
+        "second_off": 1316.8,
+        "first_off": 1300.0
+      }
+    },
+    "indonesia": {
+      "O": {
+        "second_off": 1057.1,
+        "first_off": 1039.7
+      },
+      "D": {
+        "second_off": 1279.6,
+        "first_off": 1344.7
+      }
+    },
+    "switzerland": {
+      "O": {
+        "second_off": 1048.5,
+        "first_off": 1018.8
+      },
+      "D": {
+        "second_off": 1314.2,
+        "first_off": 1360.6
       }
     },
     "morocco": {
       "O": {
-        "first_off": 1076.3,
-        "second_off": 1091.6
+        "second_off": 1091.6,
+        "first_off": 1076.3
       },
       "D": {
-        "first_off": 1309.7,
-        "second_off": 1292.5
+        "second_off": 1292.5,
+        "first_off": 1309.7
+      }
+    },
+    "uk": {
+      "O": {
+        "second_off": 1068.9,
+        "first_off": 1123.5
+      },
+      "D": {
+        "second_off": 1300.4,
+        "first_off": 1325.9
+      }
+    },
+    "mongolia": {
+      "O": {
+        "second_off": 1018.4,
+        "first_off": 1028.9
+      },
+      "D": {
+        "second_off": 1291.6,
+        "first_off": 1322.6
+      }
+    },
+    "brazil": {
+      "O": {
+        "second_off": 1098.0,
+        "first_off": 1111.9
+      },
+      "D": {
+        "second_off": 1328.0,
+        "first_off": 1382.7
+      }
+    },
+    "usa": {
+      "O": {
+        "second_off": 1054.4,
+        "first_off": 1118.4
+      },
+      "D": {
+        "second_off": 1301.3,
+        "first_off": 1302.9
+      }
+    },
+    "germany": {
+      "O": {
+        "second_off": 1073.5,
+        "first_off": 1072.3
+      },
+      "D": {
+        "second_off": 1317.5,
+        "first_off": 1306.8
+      }
+    },
+    "serbia": {
+      "O": {
+        "second_off": 1091.7,
+        "first_off": 1104.7
+      },
+      "D": {
+        "second_off": 1299.8,
+        "first_off": 1306.8
+      }
+    },
+    "india": {
+      "O": {
+        "second_off": 1072.2,
+        "first_off": 1087.1
+      },
+      "D": {
+        "second_off": 1314.4,
+        "first_off": 1333.8
+      }
+    },
+    "kazakhstan": {
+      "O": {
+        "second_off": 1033.4,
+        "first_off": 1017.5
+      },
+      "D": {
+        "second_off": 1298.4,
+        "first_off": 1348.2
+      }
+    },
+    "france": {
+      "O": {
+        "second_off": 1045.5,
+        "first_off": 1085.4
+      },
+      "D": {
+        "second_off": 1295.5,
+        "first_off": 1336.2
+      }
+    },
+    "saudi_arabia": {
+      "O": {
+        "second_off": 1030.4,
+        "first_off": 1065.5
+      },
+      "D": {
+        "second_off": 1311.6,
+        "first_off": 1338.3
+      }
+    },
+    "guatemala": {
+      "O": {
+        "second_off": 1071.5,
+        "first_off": 1119.9
+      },
+      "D": {
+        "second_off": 1339.9,
+        "first_off": 1321.8
       }
     },
     "netherlands": {
       "O": {
-        "first_off": 1072.3,
-        "second_off": 1042.5
+        "second_off": 1042.5,
+        "first_off": 1072.3
       },
       "D": {
-        "first_off": 1375.5,
-        "second_off": 1343.3
+        "second_off": 1343.3,
+        "first_off": 1375.5
+      }
+    },
+    "oman": {
+      "O": {
+        "second_off": 1091.8,
+        "first_off": 1095.9
+      },
+      "D": {
+        "second_off": 1298.5,
+        "first_off": 1334.5
+      }
+    },
+    "mexico": {
+      "O": {
+        "second_off": 1081.9,
+        "first_off": 1110.0
+      },
+      "D": {
+        "second_off": 1336.2,
+        "first_off": 1360.7
+      }
+    },
+    "thailand": {
+      "O": {
+        "second_off": 1105.1,
+        "first_off": 1121.2
+      },
+      "D": {
+        "second_off": 1366.7,
+        "first_off": 1322.4
       }
     }
   }
