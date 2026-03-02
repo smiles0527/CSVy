@@ -173,6 +173,7 @@ class BaselineEloOffDefModel:
             self.D[at][LINE1] -= delta_h
             self.O[at][LINE1] += delta_a
             self.D[ht][LINE1] -= delta_a
+        self._recenter()
 
     def _fit_shifts(
         self, shifts_df: pd.DataFrame,
@@ -273,6 +274,36 @@ class BaselineEloOffDefModel:
             self.D[at][al] -= delta_h
             self.O[at][al] += delta_a
             self.D[ht][hl] -= delta_a
+        self._recenter()
+
+    def _recenter(self) -> None:
+        """Shift all O and D so both average to base_elo across all teams/lines.
+
+        The update rule (O += d, D -= d) conserves O+D globally but lets O and D
+        drift in opposite directions.  Re-centering applies a uniform shift that
+        preserves every team's relative O, D, and net (O-D) ordering.  The
+        league_avg_xg is adjusted to compensate for the multiplier change so
+        predict_goals() returns numerically identical results.
+        """
+        all_O, all_D = [], []
+        for team in self.O:
+            for line in self.O[team]:
+                all_O.append(self.O[team][line])
+            for line in self.D[team]:
+                all_D.append(self.D[team][line])
+        if not all_O:
+            return
+        avg_O = sum(all_O) / len(all_O)
+        avg_D = sum(all_D) / len(all_D)
+        shift_O = self.base_elo - avg_O
+        shift_D = self.base_elo - avg_D
+        for team in self.O:
+            for line in self.O[team]:
+                self.O[team][line] += shift_O
+            for line in self.D[team]:
+                self.D[team][line] += shift_D
+        if self.league_avg_xg is not None:
+            self.league_avg_xg /= 10.0 ** ((shift_O - shift_D) / self.elo_scale)
 
     def _team_net(self, team: str) -> float:
         """Net strength = TOI-weighted average of (O - D) over lines. Fallback to 0.5/0.5 if no TOI data."""
